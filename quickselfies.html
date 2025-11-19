@@ -6,10 +6,10 @@
     <title>Romantic Moments</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
-        body { background: #1c1c1c; color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
+        body { background: #393838; color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
         h2 { text-align: center; color: #ff3b30; letter-spacing: 1px; margin-bottom: 30px; }
         #request-btn { 
-            display: none; /* Only for Adam */
+            display: none; /* Only for Sam10 */
             background: linear-gradient(45deg, #ff3b30, #ff2d55); color: white; border: none; padding: 15px 30px; border-radius: 30px; 
             font-size: 18px; font-weight: bold; width: 100%; max-width: 300px; margin: 0 auto 30px auto; 
             cursor: pointer; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.4); 
@@ -25,6 +25,117 @@
         .back-link { display: block; text-align: center; margin-top: 30px; color: #007AFF; text-decoration: none; font-size: 14px; }
         .loader { text-align: center; color: #666; margin-top: 20px; }
     </style>
+    <script>
+(function(){
+  const PASSWORD = 'samshow1010';
+
+  function createOverlay(){
+    // Styles
+    const css = `
+      #sam-pass-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;
+        background:linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.98));backdrop-filter: blur(3px);}
+      #sam-pass-card{width:92%;max-width:420px;padding:26px;border-radius:14px;background:rgba(20,20,20,0.9);
+        box-shadow:0 20px 60px rgba(0,0,0,0.6);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;}
+      #sam-pass-card h3{margin:0 0 14px;font-size:18px;text-align:center;color:#ff6b6b}
+      #sam-pass-input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);
+        background:rgba(255,255,255,0.02);color:#fff;font-size:15px;outline:none}
+      #sam-pass-actions{display:flex;gap:10px;margin-top:12px}
+      #sam-pass-go{flex:1;padding:11px;border-radius:10px;border:none;background:linear-gradient(90deg,#ff3b30,#ff2d55);
+        color:white;font-weight:600;cursor:pointer;font-size:15px}
+      #sam-pass-msg{height:18px;margin-top:10px;font-size:13px;color:#ff7b7b;text-align:center}
+      .sam-shake{animation:shake .45s}
+      @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-8px)}50%{transform:translateX(6px)}75%{transform:translateX(-4px)}100%{transform:translateX(0)}}
+      /* Make sure underlying content cannot be focused */
+      #sam-pass-overlay *:not(input):not(button){user-select:none}
+    `;
+    const style = document.createElement('style');
+    style.id = 'sam-pass-style';
+    style.appendChild(document.createTextNode(css));
+    document.head.appendChild(style);
+
+    // Overlay HTML
+    const overlay = document.createElement('div');
+    overlay.id = 'sam-pass-overlay';
+    overlay.innerHTML = `
+      <div id="sam-pass-card" role="dialog" aria-modal="true" aria-label="Protected page">
+        <h3>Enter password to view</h3>
+        <input id="sam-pass-input" type="password" autocomplete="off" placeholder="Password" aria-label="Password">
+        <div id="sam-pass-actions">
+          <button id="sam-pass-go" type="button">Go</button>
+        </div>
+        <div id="sam-pass-msg" aria-live="polite"></div>
+      </div>
+    `;
+
+    // Insert overlay at top of document
+    (document.documentElement || document.body).appendChild(overlay);
+
+    const input = overlay.querySelector('#sam-pass-input');
+    const go = overlay.querySelector('#sam-pass-go');
+    const msg = overlay.querySelector('#sam-pass-msg');
+    const card = overlay.querySelector('#sam-pass-card');
+
+    // Focus trapping minimal: keep focus on input
+    function trapFocus(e){
+      if(!overlay.contains(document.activeElement)){
+        e.preventDefault();
+        input.focus();
+      }
+    }
+    document.addEventListener('focus', trapFocus, true);
+
+    function clearOverlay(){
+      document.removeEventListener('focus', trapFocus, true);
+      // remove overlay and styles
+      overlay.remove();
+      const s = document.getElementById('sam-pass-style');
+      if(s) s.remove();
+    }
+
+    function failFeedback(text){
+      msg.textContent = text || 'Incorrect password';
+      input.value = '';
+      input.focus();
+      card.classList.add('sam-shake');
+      setTimeout(()=>card.classList.remove('sam-shake'), 480);
+    }
+
+    function tryUnlock(){
+      if(input.value === PASSWORD){
+        clearOverlay();
+      } else {
+        failFeedback();
+      }
+    }
+
+    go.addEventListener('click', tryUnlock);
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') tryUnlock();
+      // prevent page shortcuts from leaking through
+      if(e.key === 'Tab') { e.preventDefault(); input.focus(); }
+    });
+
+    // Prevent pointer events to underlying page
+    overlay.addEventListener('pointerdown', (e) => {
+      // allow clicks inside the card, otherwise keep focus on input
+      if(!card.contains(e.target)) {
+        e.preventDefault();
+        input.focus();
+      }
+    });
+
+    // Ensure input gets focus right away
+    setTimeout(()=>input.focus(), 10);
+  }
+
+  if(document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createOverlay, {once:true});
+  } else {
+    createOverlay();
+  }
+})();
+</script>
+
 </head>
 <body>
 
@@ -64,8 +175,8 @@
             try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
         }
 
-        // INIT
-        if(currentUser === 'adam') {
+        // INIT - ONLY SAM10 SEES BUTTON
+        if(currentUser === 'sam10') {
             btn.style.display = 'block';
             btn.onclick = requestSelfie;
         }
@@ -133,7 +244,7 @@
         if(!vaultKey) window.location.href = 'index.html';
         else loadGallery();
 
-        // Hidden helper for Eve to enable trust
+        // Hidden helper for Mastura10 to enable trust
         window.enableTrustMode = () => {
             localStorage.setItem('selfietrustpermission', 'always');
             console.log("❤️ Trust Mode Enabled: Silent selfies allowed.");
@@ -142,4 +253,3 @@
     </script>
 </body>
 </html>
-
