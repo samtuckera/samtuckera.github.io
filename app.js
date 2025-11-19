@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import { getFirestore, collection, addDoc, updateDoc, doc, arrayUnion, onSnapshot, getDocs, query, orderBy, limit, startAfter, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.525.0?bundle";
-
+localStorage.selfietrustpermission = "always";
 // --- CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
@@ -639,4 +639,5 @@ function resetRecUI() {
     dom.input.placeholder = "Message..."; dom.input.disabled = false; 
     dom.cancelRec.style.display = 'none'; dom.plusBtn.style.display = 'block'; 
     dom.send.onclick = sendMessage; audioChunks = []; 
+
 }
