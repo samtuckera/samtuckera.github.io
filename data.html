@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Decryptor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            background-color: #0d0d0d;
+            color: #e0e0e0;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+        .container {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid #333;
+        }
+        h2 { color: #007AFF; margin-top: 0; }
+        
+        label { display: block; margin-bottom: 5px; color: #888; font-size: 12px; }
+        
+        textarea, input {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+        textarea { height: 120px; resize: vertical; }
+        
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        button:hover { background: #0062cc; }
+
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 6px;
+            min-height: 50px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            display: none;
+            color: #34c759;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🔐 Raw Decryptor</h2>
+        
+        <label>SECRET KEY</label>
+        <input type="text" id="key" placeholder="Enter vault password...">
+
+        <label>ENCRYPTED STRING</label>
+        <textarea id="cipher" placeholder="Paste the 'd' value here..."></textarea>
+
+        <button onclick="runDecrypt()">Decrypt</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        function runDecrypt() {
+            const key = document.getElementById('key').value;
+            const cipher = document.getElementById('cipher').value.trim();
+            const out = document.getElementById('output');
+            
+            if(!key || !cipher) return alert("Missing Key or Data");
+
+            out.style.display = 'block';
+
+            try {
+                const bytes = CryptoJS.AES.decrypt(cipher, key);
+                const originalText = bytes.toString(CryptoJS.enc.Utf8);
+
+                if (originalText) {
+                    out.innerText = originalText;
+                    out.style.color = "#34c759"; // Green for success
+                } else {
+                    out.innerText = "❌ Decryption Failed (Wrong Key or Data)";
+                    out.style.color = "#ff3b30";
+                }
+            } catch (e) {
+                out.innerText = "❌ Error: " + e.message;
+                out.style.color = "#ff3b30";
+            }
+        }
+    </script>
+
+</body>
+</html>

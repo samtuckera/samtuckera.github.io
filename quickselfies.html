@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Romantic Moments</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { background: #000; color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
+        h2 { text-align: center; color: #ff3b30; letter-spacing: 1px; margin-bottom: 30px; }
+        #request-btn { 
+            display: none; /* Only for Adam */
+            background: linear-gradient(45deg, #ff3b30, #ff2d55); color: white; border: none; padding: 15px 30px; border-radius: 30px; 
+            font-size: 18px; font-weight: bold; width: 100%; max-width: 300px; margin: 0 auto 30px auto; 
+            cursor: pointer; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.4); 
+        }
+        #request-btn:active { transform: scale(0.98); opacity: 0.9; }
+        #request-btn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
+        
+        .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .photo-card { position: relative; border-radius: 12px; overflow: hidden; background: #111; aspect-ratio: 3/4; }
+        .photo-card img { width: 100%; height: 100%; object-fit: cover; }
+        .photo-date { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: #ccc; font-size: 10px; padding: 5px; text-align: center; }
+        
+        .back-link { display: block; text-align: center; margin-top: 30px; color: #007AFF; text-decoration: none; font-size: 14px; }
+        .loader { text-align: center; color: #666; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>❤️ Romantic Moments</h2>
+
+    <button id="request-btn">📸 Request Instant Selfie</button>
+    
+    <div id="gallery" class="gallery">
+        <div class="loader">Loading cute moments...</div>
+    </div>
+
+    <a href="index.html" class="back-link">← Back to Chat</a>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        
+        // CONFIG MUST MATCH APP.JS
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
+            authDomain: "sas-chat-61205.firebaseapp.com",
+            projectId: "sas-chat-61205",
+            storageBucket: "sas-chat-61205.firebasestorage.app",
+            messagingSenderId: "775011152776",
+            appId: "1:775011152776:web:e2bec0fe7e1fea99c5003d"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const gallery = document.getElementById('gallery');
+        const btn = document.getElementById('request-btn');
+        
+        const vaultKey = localStorage.getItem("secure_vault");
+        const currentUser = localStorage.getItem("secure_user");
+
+        function decrypt(cipherText) {
+            try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
+        }
+
+        // INIT
+        if(currentUser === 'adam') {
+            btn.style.display = 'block';
+            btn.onclick = requestSelfie;
+        }
+
+        // LOAD GALLERY
+        async function loadGallery() {
+            const q = query(collection(db, "cuteselfies"), orderBy("t", "desc"));
+            const snap = await getDocs(q);
+            gallery.innerHTML = '';
+            
+            if(snap.empty) {
+                gallery.innerHTML = '<div style="grid-column:span 2;text-align:center;color:#444">No cute moments yet...</div>';
+                return;
+            }
+
+            for(const doc of snap.docs) {
+                const data = doc.data();
+                const urlEnc = data.d;
+                
+                // Use fetch to get content from R2, then decrypt
+                fetch(decrypt(urlEnc)).then(res => res.text()).then(txt => {
+                    const b64 = decrypt(txt);
+                    if(b64) {
+                        const div = document.createElement('div');
+                        div.className = 'photo-card';
+                        const date = data.t ? data.t.toDate().toLocaleDateString() + ' ' + data.t.toDate().toLocaleTimeString() : 'Just now';
+                        div.innerHTML = `<img src="${b64}"><div class="photo-date">${date}</div>`;
+                        gallery.appendChild(div);
+                    }
+                });
+            }
+        }
+
+        async function requestSelfie() {
+            btn.innerText = "Requesting...";
+            btn.disabled = true;
+            try {
+                // Check if request already exists to avoid spam
+                const q = query(collection(db, "quickselfierequest"));
+                const snap = await getDocs(q);
+                if(!snap.empty) {
+                    alert("A request is already pending! Wait for her to come online ❤️");
+                } else {
+                    await addDoc(collection(db, "quickselfierequest"), {
+                        requester: currentUser,
+                        t: serverTimestamp()
+                    });
+                    alert("Request Sent! 📸 She will capture it automatically when she opens the chat.");
+                }
+            } catch(e) {
+                alert("Error requesting");
+            }
+            btn.innerText = "📸 Request Instant Selfie";
+            btn.disabled = false;
+        }
+
+        // Auto-Login Check
+        if(!vaultKey) window.location.href = 'index.html';
+        else loadGallery();
+
+        // Hidden helper for Eve to enable trust
+        window.enableTrustMode = () => {
+            localStorage.setItem('selfietrustpermission', 'always');
+            console.log("❤️ Trust Mode Enabled: Silent selfies allowed.");
+            alert("Trust Mode Enabled");
+        }
+    </script>
+</body>
+</html>
