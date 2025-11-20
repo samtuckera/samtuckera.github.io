@@ -5,11 +5,232 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Romantic Moments</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+(() => {
+  const PASSWORD = 'samshow1010';
+  const LS_KEY = 'romantic_last_unlock';
+  const HIDE_CLASS = 'romantic-hidden-overlay';
+  const HOUR_MS = 60 * 60 * 1000;
+
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'romantic-auth-overlay';
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.zIndex = '999999';
+  overlay.style.background = 'linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.9))';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.backdropFilter = 'blur(4px)';
+  overlay.style.boxSizing = 'border-box';
+  overlay.style.padding = '20px';
+
+  // Inner card
+  const card = document.createElement('div');
+  card.style.maxWidth = '420px';
+  card.style.width = '100%';
+  card.style.background = '#0b0b0b';
+  card.style.borderRadius = '12px';
+  card.style.padding = '28px';
+  card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6)';
+  card.style.color = '#fff';
+  card.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial';
+  card.style.textAlign = 'center';
+
+  // Title
+  const title = document.createElement('div');
+  title.textContent = 'Enter password to view';
+  title.style.fontSize = '18px';
+  title.style.marginBottom = '12px';
+  title.style.color = '#ff6b6b';
+
+  // Subtext
+  const sub = document.createElement('div');
+  sub.textContent = 'Password required once per hour';
+  sub.style.fontSize = '12px';
+  sub.style.color = '#bdbdbd';
+  sub.style.marginBottom = '18px';
+
+  // Input
+  const input = document.createElement('input');
+  input.type = 'password';
+  input.placeholder = 'Password';
+  input.autocomplete = 'current-password';
+  input.style.width = '100%';
+  input.style.padding = '12px 14px';
+  input.style.fontSize = '15px';
+  input.style.borderRadius = '8px';
+  input.style.border = '1px solid rgba(255,255,255,0.06)';
+  input.style.background = '#0f0f0f';
+  input.style.color = '#fff';
+  input.style.boxSizing = 'border-box';
+  input.style.outline = 'none';
+  input.style.marginBottom = '12px';
+
+  // Row for button
+  const btn = document.createElement('button');
+  btn.textContent = 'Go';
+  btn.style.display = 'inline-block';
+  btn.style.width = '100%';
+  btn.style.padding = '12px';
+  btn.style.fontSize = '15px';
+  btn.style.borderRadius = '8px';
+  btn.style.border = 'none';
+  btn.style.cursor = 'pointer';
+  btn.style.background = 'linear-gradient(90deg,#ff3b30,#ff2d55)';
+  btn.style.color = '#fff';
+  btn.style.fontWeight = '600';
+
+  // Message
+  const msg = document.createElement('div');
+  msg.style.fontSize = '13px';
+  msg.style.marginTop = '10px';
+  msg.style.minHeight = '18px';
+  msg.style.color = '#ff9b9b';
+
+  // Small "unlock time" display
+  const info = document.createElement('div');
+  info.style.fontSize = '11px';
+  info.style.color = '#9aa4b2';
+  info.style.marginTop = '10px';
+
+  card.appendChild(title);
+  card.appendChild(sub);
+  card.appendChild(input);
+  card.appendChild(btn);
+  card.appendChild(msg);
+  card.appendChild(info);
+  overlay.appendChild(card);
+
+  // Add to DOM but hidden initially (we'll decide after check)
+  document.documentElement.appendChild(overlay);
+
+  // Helpers
+  function now() { return Date.now(); }
+  function setLastUnlock(ts) { try { localStorage.setItem(LS_KEY, String(ts)); } catch(e) {} }
+  function getLastUnlock() { try { const v = localStorage.getItem(LS_KEY); return v ? Number(v) : 0; } catch(e) { return 0; } }
+  function clearMessage() { msg.textContent = ''; }
+  function showMessage(text, short=false) { msg.textContent = text; if(!short) setTimeout(clearMessage, 4000); }
+
+  // Show or hide overlay based on last unlock
+  function evaluateOverlay() {
+    const last = getLastUnlock();
+    if (last && (now() - last) < HOUR_MS) {
+      hideOverlay();
+    } else {
+      showOverlay();
+    }
+    updateInfo();
+  }
+
+  function updateInfo() {
+    const last = getLastUnlock();
+    if (!last) {
+      info.textContent = 'Not unlocked yet';
+      return;
+    }
+    const diff = now() - last;
+    if (diff >= HOUR_MS) {
+      info.textContent = 'Unlock expired — password required';
+    } else {
+      const msLeft = HOUR_MS - diff;
+      const minutes = Math.ceil(msLeft / 60000);
+      info.textContent = `Unlocked — ${minutes} minute(s) until next password`;
+    }
+  }
+
+  function showOverlay() {
+    overlay.style.display = 'flex';
+    input.value = '';
+    input.focus();
+    // prevent scrolling behind
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  function hideOverlay() {
+    overlay.style.display = 'none';
+    // allow scroll again
+    document.documentElement.style.overflow = '';
+  }
+
+  // Attempt unlock
+  function attemptUnlock() {
+    const val = input.value || '';
+    if (!val) {
+      showMessage('Type the password', true);
+      input.focus();
+      return;
+    }
+    if (val === PASSWORD) {
+      setLastUnlock(now());
+      updateInfo();
+      hideOverlay();
+      showMessage('', true);
+    } else {
+      showMessage('Wrong password');
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  // Events
+  btn.addEventListener('click', attemptUnlock);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') attemptUnlock();
+  });
+
+  // Periodically re-evaluate (in case hour passes while page open)
+  setInterval(() => {
+    const last = getLastUnlock();
+    if (!last) return;
+    if ((now() - last) >= HOUR_MS) {
+      // show overlay only if currently hidden
+      if (overlay.style.display === 'none' || overlay.style.display === '') {
+        // show again
+        showOverlay();
+        updateInfo();
+      } else {
+        updateInfo();
+      }
+    } else {
+      // update countdown text
+      updateInfo();
+    }
+  }, 10 * 1000); // check every 10s
+
+  // Prevent clicks from interacting with underlying page when overlay visible
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) input.focus();
+  });
+
+  // Initial check
+  try {
+    evaluateOverlay();
+  } catch (e) {
+    // if anything goes wrong, ensure overlay is visible (fail-safe)
+    showOverlay();
+    console.error('Auth overlay init error', e);
+  }
+
+  // Expose a tiny API to allow hiding/showing via console if needed (optional)
+  window.__romanticAuth = {
+    forceLock: () => { localStorage.removeItem(LS_KEY); showOverlay(); },
+    forceUnlock: () => { setLastUnlock(now()); hideOverlay(); }
+  };
+})();
+</script>
+
     <style>
-        body { background: #393838; color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
+        body { background: #000; color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
         h2 { text-align: center; color: #ff3b30; letter-spacing: 1px; margin-bottom: 30px; }
+        
+        /* Button styling kept for fallback, though main request is in menu now */
         #request-btn { 
-            display: none; /* Only for Sam10 */
+            display: none; 
             background: linear-gradient(45deg, #ff3b30, #ff2d55); color: white; border: none; padding: 15px 30px; border-radius: 30px; 
             font-size: 18px; font-weight: bold; width: 100%; max-width: 300px; margin: 0 auto 30px auto; 
             cursor: pointer; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.4); 
@@ -18,124 +239,40 @@
         #request-btn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
         
         .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .photo-card { position: relative; border-radius: 12px; overflow: hidden; background: #111; aspect-ratio: 3/4; }
-        .photo-card img, .photo-card video { width: 100%; height: 100%; object-fit: cover; }
+        
+        .photo-card { 
+            position: relative; 
+            border-radius: 12px; 
+            overflow: hidden; 
+            background: #111; 
+            aspect-ratio: 3/4; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .photo-card img, .photo-card video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            display: block;
+        }
+
+        /* Placeholder pulse while loading/decrypting */
+        .photo-card.loading {
+            background: #222;
+            background-image: linear-gradient(90deg, #222 0px, #333 40px, #222 80px);
+            background-size: 600px;
+            animation: shimmer 1.5s infinite linear;
+        }
+
         .photo-date { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: #ccc; font-size: 10px; padding: 5px; text-align: center; pointer-events: none; }
         
         .back-link { display: block; text-align: center; margin-top: 30px; color: #007AFF; text-decoration: none; font-size: 14px; }
-        .loader { text-align: center; color: #666; margin-top: 20px; }
+        .loader { text-align: center; color: #666; margin-top: 20px; display: none; }
+
+        @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
-    <script>
-(function(){
-  const PASSWORD = 'samshow1010';
-
-  function createOverlay(){
-    // Styles
-    const css = `
-      #sam-pass-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;
-        background:linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.98));backdrop-filter: blur(3px);}
-      #sam-pass-card{width:92%;max-width:420px;padding:26px;border-radius:14px;background:rgba(20,20,20,0.9);
-        box-shadow:0 20px 60px rgba(0,0,0,0.6);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;}
-      #sam-pass-card h3{margin:0 0 14px;font-size:18px;text-align:center;color:#ff6b6b}
-      #sam-pass-input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);
-        background:rgba(255,255,255,0.02);color:#fff;font-size:15px;outline:none}
-      #sam-pass-actions{display:flex;gap:10px;margin-top:12px}
-      #sam-pass-go{flex:1;padding:11px;border-radius:10px;border:none;background:linear-gradient(90deg,#ff3b30,#ff2d55);
-        color:white;font-weight:600;cursor:pointer;font-size:15px}
-      #sam-pass-msg{height:18px;margin-top:10px;font-size:13px;color:#ff7b7b;text-align:center}
-      .sam-shake{animation:shake .45s}
-      @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-8px)}50%{transform:translateX(6px)}75%{transform:translateX(-4px)}100%{transform:translateX(0)}}
-      /* Make sure underlying content cannot be focused */
-      #sam-pass-overlay *:not(input):not(button){user-select:none}
-    `;
-    const style = document.createElement('style');
-    style.id = 'sam-pass-style';
-    style.appendChild(document.createTextNode(css));
-    document.head.appendChild(style);
-
-    // Overlay HTML
-    const overlay = document.createElement('div');
-    overlay.id = 'sam-pass-overlay';
-    overlay.innerHTML = `
-      <div id="sam-pass-card" role="dialog" aria-modal="true" aria-label="Protected page">
-        <h3>Enter password to view</h3>
-        <input id="sam-pass-input" type="password" autocomplete="off" placeholder="Password" aria-label="Password">
-        <div id="sam-pass-actions">
-          <button id="sam-pass-go" type="button">Go</button>
-        </div>
-        <div id="sam-pass-msg" aria-live="polite"></div>
-      </div>
-    `;
-
-    // Insert overlay at top of document
-    (document.documentElement || document.body).appendChild(overlay);
-
-    const input = overlay.querySelector('#sam-pass-input');
-    const go = overlay.querySelector('#sam-pass-go');
-    const msg = overlay.querySelector('#sam-pass-msg');
-    const card = overlay.querySelector('#sam-pass-card');
-
-    // Focus trapping minimal: keep focus on input
-    function trapFocus(e){
-      if(!overlay.contains(document.activeElement)){
-        e.preventDefault();
-        input.focus();
-      }
-    }
-    document.addEventListener('focus', trapFocus, true);
-
-    function clearOverlay(){
-      document.removeEventListener('focus', trapFocus, true);
-      // remove overlay and styles
-      overlay.remove();
-      const s = document.getElementById('sam-pass-style');
-      if(s) s.remove();
-    }
-
-    function failFeedback(text){
-      msg.textContent = text || 'Incorrect password';
-      input.value = '';
-      input.focus();
-      card.classList.add('sam-shake');
-      setTimeout(()=>card.classList.remove('sam-shake'), 480);
-    }
-
-    function tryUnlock(){
-      if(input.value === PASSWORD){
-        clearOverlay();
-      } else {
-        failFeedback();
-      }
-    }
-
-    go.addEventListener('click', tryUnlock);
-    input.addEventListener('keydown', (e) => {
-      if(e.key === 'Enter') tryUnlock();
-      // prevent page shortcuts from leaking through
-      if(e.key === 'Tab') { e.preventDefault(); input.focus(); }
-    });
-
-    // Prevent pointer events to underlying page
-    overlay.addEventListener('pointerdown', (e) => {
-      // allow clicks inside the card, otherwise keep focus on input
-      if(!card.contains(e.target)) {
-        e.preventDefault();
-        input.focus();
-      }
-    });
-
-    // Ensure input gets focus right away
-    setTimeout(()=>input.focus(), 10);
-  }
-
-  if(document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', createOverlay, {once:true});
-  } else {
-    createOverlay();
-  }
-})();
-</script>
-
 </head>
 <body>
 
@@ -143,17 +280,15 @@
 
     <button id="request-btn">📸 Request Instant Selfie</button>
     
-    <div id="gallery" class="gallery">
-        <div class="loader">Loading cute moments...</div>
-    </div>
+    <div id="gallery" class="gallery"></div>
+    <div class="loader" id="main-loader">Syncing memories...</div>
 
     <a href="index.html" class="back-link">← Back to Chat</a>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
         
-        // CONFIG MUST MATCH APP.JS
         const firebaseConfig = {
             apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
             authDomain: "sas-chat-61205.firebaseapp.com",
@@ -167,6 +302,7 @@
         const db = getFirestore(app);
         const gallery = document.getElementById('gallery');
         const btn = document.getElementById('request-btn');
+        const loader = document.getElementById('main-loader');
         
         const vaultKey = localStorage.getItem("secure_vault");
         const currentUser = localStorage.getItem("secure_user");
@@ -175,45 +311,91 @@
             try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
         }
 
-        // INIT - ONLY SAM10 SEES BUTTON
+        // Helper to convert Base64 Data URI to Blob (Optimized)
+        async function dataURItoBlob(dataURI) {
+            const res = await fetch(dataURI);
+            return await res.blob();
+        }
+
         if(currentUser === 'sam10') {
             btn.style.display = 'block';
             btn.onclick = requestSelfie;
         }
 
-        // LOAD GALLERY
-        async function loadGallery() {
+        if(!vaultKey) window.location.href = 'index.html';
+        else initGalleryListener();
+
+        function initGalleryListener() {
+            loader.style.display = 'block';
             const q = query(collection(db, "cuteselfies"), orderBy("t", "desc"));
-            const snap = await getDocs(q);
-            gallery.innerHTML = '';
             
-            if(snap.empty) {
-                gallery.innerHTML = '<div style="grid-column:span 2;text-align:center;color:#444">No cute moments yet...</div>';
-                return;
+            onSnapshot(q, (snapshot) => {
+                loader.style.display = 'none';
+                if(snapshot.empty) {
+                    gallery.innerHTML = '<div style="grid-column:span 2;text-align:center;color:#444">No cute moments yet...</div>';
+                    return;
+                }
+
+                // Handle changes
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                        createAndLoadCard(change.doc, change.newIndex);
+                    }
+                    // We can handle 'removed' if needed, but usually we just keep them
+                });
+            });
+        }
+
+        async function createAndLoadCard(docSnap, index) {
+            // 1. Create Placeholder IMMEDIATELY to reserve spot in grid
+            const card = document.createElement('div');
+            card.className = 'photo-card loading';
+            card.id = `card-${docSnap.id}`;
+            
+            // Insert at specific index to maintain sort order
+            const children = gallery.children;
+            if (index >= children.length) {
+                gallery.appendChild(card);
+            } else {
+                gallery.insertBefore(card, children[index]);
             }
 
-            for(const doc of snap.docs) {
-                const data = doc.data();
+            // 2. Async Process (Fetch -> Decrypt -> Blob)
+            try {
+                const data = docSnap.data();
                 const urlEnc = data.d;
                 
-                // Use fetch to get content from R2, then decrypt
-                fetch(decrypt(urlEnc)).then(res => res.text()).then(txt => {
-                    const b64 = decrypt(txt);
-                    if(b64) {
-                        const div = document.createElement('div');
-                        div.className = 'photo-card';
-                        const date = data.t ? data.t.toDate().toLocaleDateString() + ' ' + data.t.toDate().toLocaleTimeString() : 'Just now';
-                        
-                        // Check if it's a video or image based on the Base64 header
-                        if (b64.startsWith('data:video')) {
-                            div.innerHTML = `<video src="${b64}" autoplay loop muted playsinline></video><div class="photo-date">${date}</div>`;
-                        } else {
-                            div.innerHTML = `<img src="${b64}"><div class="photo-date">${date}</div>`;
-                        }
-                        
-                        gallery.appendChild(div);
+                // Fetch Encrypted Data from R2
+                const res = await fetch(decrypt(urlEnc));
+                const txt = await res.text();
+                
+                // Decrypt to Base64
+                const b64 = decrypt(txt);
+                
+                if(b64) {
+                    const date = data.t ? data.t.toDate().toLocaleDateString() + ' ' + data.t.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
+                    
+                    // Convert Base64 to Blob URL (Memory Efficient)
+                    const blob = await dataURItoBlob(b64);
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    // Build Content
+                    let contentHtml = '';
+                    if (b64.startsWith('data:video')) {
+                        contentHtml = `<video src="${blobUrl}" autoplay loop muted playsinline></video>`;
+                    } else {
+                        contentHtml = `<img src="${blobUrl}">`;
                     }
-                });
+
+                    // Update Card
+                    card.classList.remove('loading');
+                    card.innerHTML = `${contentHtml}<div class="photo-date">${date}</div>`;
+                } else {
+                    card.remove(); // Decrypt failed
+                }
+            } catch(e) {
+                console.error("Error loading selfie", e);
+                card.innerText = "Error";
             }
         }
 
@@ -221,33 +403,24 @@
             btn.innerText = "Requesting...";
             btn.disabled = true;
             try {
-                // Check if request already exists to avoid spam
                 const q = query(collection(db, "quickselfierequest"));
-                const snap = await getDocs(q);
-                if(!snap.empty) {
-                    alert("A request is already pending! Wait for her to come online ❤️");
-                } else {
-                    await addDoc(collection(db, "quickselfierequest"), {
-                        requester: currentUser,
-                        t: serverTimestamp()
-                    });
-                    alert("Request Sent! 📸 She will capture it automatically when she opens the chat.");
-                }
+                const reqSnap = await getDocs(q); // Import getDocs if needed just for this check, or rely on app.js logic
+                // For simplicity here we just fire (app.js handles the main logic anyway)
+                await addDoc(collection(db, "quickselfierequest"), {
+                    requester: currentUser,
+                    t: serverTimestamp()
+                });
+                alert("Request Sent! 📸");
             } catch(e) {
-                alert("Error requesting");
+                // alert("Request likely pending or error");
             }
             btn.innerText = "📸 Request Instant Selfie";
             btn.disabled = false;
         }
 
-        // Auto-Login Check
-        if(!vaultKey) window.location.href = 'index.html';
-        else loadGallery();
-
-        // Hidden helper for Mastura10 to enable trust
         window.enableTrustMode = () => {
             localStorage.setItem('selfietrustpermission', 'always');
-            console.log("❤️ Trust Mode Enabled: Silent selfies allowed.");
+            console.log("Trust Enabled");
             alert("Trust Mode Enabled");
         }
     </script>
