@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Romantic Moments — Optimized</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   
@@ -266,6 +267,7 @@
         z-index: 3;
         font-weight: 700;
         font-family: monospace;
+        letter-spacing: -0.5px;
     }
 
     /* Viewed Tick */
@@ -307,7 +309,6 @@
 
     .modal .close { right:10px; font-size:20px; }
     .modal .toggle { right:60px; font-size:22px; }
-    /* New Fullscreen Button */
     .modal .fs-btn { right:110px; font-size:18px; }
 
     .modal .hint { position:absolute; bottom:8px; left:10px; right:10px; text-align:center; color:#ddd; font-size:13px; pointer-events:none; text-shadow:0 1px 3px #000; z-index: 10; }
@@ -342,7 +343,8 @@
 </head>
 <body>
   <div class="wrap">
-    <button id="request-btn" style="display:none;opacity: 0;">📸 Request Instant Selfie</button>
+    <h2>❤️ Romantic Moments</h2>
+    <button id="request-btn">📸 Request Instant Selfie</button>
     <div id="gallery" class="gallery" aria-live="polite"></div>
     <div id="main-loader" class="loader">Syncing memories... <span id="loader-spinner" style="display:inline-block;vertical-align:middle;margin-left:8px;"></span></div>
     <div id="end-note" class="end-note" style="display:none;">No more items.</div>
@@ -378,6 +380,9 @@
   const STORE_NAME = "metadata"; 
   const CONFIG_STORE = "config";
 
+  // CONFIG FOR NUMBERING
+  const INITIAL_SEQ = 912331241242; // Starting Point
+
   let idb = null;
 
   const initDB = () => {
@@ -405,37 +410,80 @@
 
   const saveMeta = async (docId, data) => {
     if (!idb) await initDB();
+    // Get existing first (safe read)
     const current = await getMeta(docId) || { id: docId };
     const merged = { ...current, ...data };
+    
     return new Promise((resolve) => {
         const tx = idb.transaction(STORE_NAME, "readwrite");
         tx.objectStore(STORE_NAME).put(merged);
         tx.oncomplete = () => resolve(merged);
+        tx.onerror = () => resolve(merged);
     });
   };
 
-  const assignNumberIfNeeded = async (docId) => {
+  const getMaxNumber = async () => {
+     if (!idb) await initDB();
+     return new Promise(resolve => {
+         const tx = idb.transaction(CONFIG_STORE, "readonly");
+         const req = tx.objectStore(CONFIG_STORE).get("max_number");
+         req.onsuccess = () => resolve(req.result ? req.result.value : null);
+         req.onerror = () => resolve(null);
+     });
+  };
+
+  // === FIXED ASSIGN NUMBER FUNCTION ===
+  const assignNumber = async (docId, referenceNumber = null) => {
     if (!idb) await initDB();
+    
+    // 1. Check if number already assigned (Read-only first)
     const existing = await getMeta(docId);
     if (existing && existing.number) return existing.number;
 
+    // 2. Prepare logic BEFORE opening write transaction
+    let maxNum = await getMaxNumber();
+    let nextNum;
+    let isNewMax = false;
+
+    if (referenceNumber !== null) {
+        // Scrolling down (older items)
+        nextNum = referenceNumber - 1;
+    } else {
+        // Top of list (newest items)
+        if (maxNum) {
+            nextNum = maxNum + 1;
+            isNewMax = true;
+        } else {
+            nextNum = INITIAL_SEQ;
+            isNewMax = true;
+        }
+    }
+
+    // 3. Prepare the record object (Reuse existing read or create new)
+    const recordToSave = existing || { id: docId };
+    recordToSave.number = nextNum;
+
+    // 4. Open Transaction and Execute Synchronously
     return new Promise((resolve) => {
-        const tx = idb.transaction([STORE_NAME, CONFIG_STORE], "readwrite");
-        const configStore = tx.objectStore(CONFIG_STORE);
-        const req = configStore.get("max_number");
-        req.onsuccess = () => {
-            let nextNum = 100;
-            if (req.result) nextNum = req.result.value + 1;
+        if (isNewMax) {
+            // Need to update both stores
+            const tx = idb.transaction([STORE_NAME, CONFIG_STORE], "readwrite");
+            
+            const configStore = tx.objectStore(CONFIG_STORE);
             configStore.put({ id: "max_number", value: nextNum });
+            
             const metaStore = tx.objectStore(STORE_NAME);
-            const metaReq = metaStore.get(docId);
-            metaReq.onsuccess = () => {
-                const record = metaReq.result || { id: docId };
-                record.number = nextNum;
-                metaStore.put(record);
-            }
-            resolve(nextNum);
-        };
+            metaStore.put(recordToSave);
+            
+            tx.oncomplete = () => resolve(nextNum);
+            tx.onerror = () => resolve(nextNum); // Fallback
+        } else {
+            // Just update metadata
+            const tx = idb.transaction(STORE_NAME, "readwrite");
+            tx.objectStore(STORE_NAME).put(recordToSave);
+            tx.oncomplete = () => resolve(nextNum);
+            tx.onerror = () => resolve(nextNum);
+        }
     });
   };
 
@@ -480,6 +528,9 @@
   let activeBlobUrl = null;
   let activeVideoEl = null;
   let currentOpenDocId = null;
+  
+  // Sequence Tracking
+  let lastRenderedNumber = null;
 
   // Helpers
   function showMainLoader(show=true) { loader.style.display = show ? 'block' : 'none'; if (show) loaderSpinner.innerHTML = '<div class="spinner"></div>'; else loaderSpinner.innerHTML=''; }
@@ -509,7 +560,6 @@
     else activeVideoEl.pause();
   });
 
-  // Fullscreen Toggle
   modalFs.addEventListener('click', (ev) => {
     ev.stopPropagation();
     if (!document.fullscreenElement) {
@@ -521,7 +571,6 @@
     }
   });
 
-  // Detect Exit via ESC key
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
         modal.classList.remove('is-fullscreen');
@@ -573,7 +622,8 @@
     showMainLoader(true);
     if (liveUnsubscribe) { liveUnsubscribe(); liveUnsubscribe = null; }
     const q = query(collection(db, "cuteselfies"), orderBy("t", "desc"), limit(PAGE_SIZE));
-    liveUnsubscribe = onSnapshot(q, (snapshot) => {
+    
+    liveUnsubscribe = onSnapshot(q, async (snapshot) => {
       showMainLoader(false);
       if (snapshot.empty) {
         gallery.innerHTML = `<div style="grid-column:span 2;text-align:center;color:#444">No cute moments yet...</div>`;
@@ -581,10 +631,20 @@
         endNote.style.display = 'block';
         return;
       }
+      
       gallery.innerHTML = '';
-      snapshot.docs.forEach((docSnap) => {
-        renderPlaceholderCard(docSnap, snapshot.docs.indexOf(docSnap));
-      });
+      // Reset sequence tracker for render
+      lastRenderedNumber = null;
+
+      // Process docs sequentially to maintain number chain
+      for (let i = 0; i < snapshot.docs.length; i++) {
+          const docSnap = snapshot.docs[i];
+          // For the very first doc in the list, we don't pass a reference number (so it calculates Max+1 or Initial)
+          // For subsequent docs, we pass the previous number
+          const refNum = (i === 0) ? null : lastRenderedNumber;
+          await renderPlaceholderCard(docSnap, i, refNum);
+      }
+
       lastDoc = snapshot.docs[snapshot.docs.length - 1];
       reachedEnd = snapshot.docs.length < PAGE_SIZE;
       endNote.style.display = reachedEnd ? 'block' : 'none';
@@ -602,7 +662,10 @@
         reachedEnd = true;
         endNote.style.display = 'block';
       } else {
-        snap.docs.forEach((d, i) => renderPlaceholderCard(d, gallery.children.length + i));
+        // Continue sequence from current state
+        for (let i = 0; i < snap.docs.length; i++) {
+            await renderPlaceholderCard(snap.docs[i], gallery.children.length, lastRenderedNumber);
+        }
         lastDoc = snap.docs[snap.docs.length - 1];
         reachedEnd = snap.docs.length < PAGE_SIZE;
         endNote.style.display = reachedEnd ? 'block' : 'none';
@@ -610,17 +673,19 @@
     } catch (e) { console.error(e); } finally { loadingMore = false; showMainLoader(false); }
   }
 
-  async function renderPlaceholderCard(docSnap, index) {
+  async function renderPlaceholderCard(docSnap, index, referenceNumber = null) {
     const id = docSnap.id;
     const data = docSnap.data();
     
-    // Extract Date & Time
     const dateObj = data.t ? data.t.toDate() : new Date();
     const dateStr = dateObj.toLocaleDateString();
     const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
+    // Calculate Number
+    let num = await assignNumber(id, referenceNumber);
+    lastRenderedNumber = num; // Update tracker for next item
+
     // Local Meta
-    let num = await assignNumberIfNeeded(id);
     let meta = await getMeta(id);
     let thumbBase64 = meta ? meta.thumbnail : null;
     let isViewed = meta ? meta.viewed : false;
@@ -653,7 +718,6 @@
     placeholder.innerHTML = `<div style="font-size:28px;">🎬</div>`;
     card.appendChild(placeholder);
 
-    // New Date/Time Structure
     const metaEl = document.createElement('div');
     metaEl.className = 'photo-meta';
     metaEl.innerHTML = `<span class="photo-time">${timeStr}</span><span class="photo-date">${dateStr}</span>`;
@@ -702,7 +766,7 @@
     modal.setAttribute('aria-hidden', 'false');
     modalSkeleton.style.display = 'flex';
     modalToggle.style.display = 'none';
-    modalFs.style.display = 'none'; // Hide fs button during load
+    modalFs.style.display = 'none';
 
     try {
       const data = docSnap.data();
@@ -722,7 +786,7 @@
       activeBlobUrl = blobUrl;
 
       const vid = document.createElement('video');
-      vid.controls = false; // Default hidden
+      vid.controls = false; 
       vid.playsInline = true;
       vid.src = blobUrl;
       vid.style.maxWidth = '100%';
@@ -736,20 +800,14 @@
       modalContent.appendChild(vid);
       activeVideoEl = vid;
 
-      // Long press logic for Controls
       let pressTimer;
-      const startPress = () => {
-         pressTimer = setTimeout(() => { vid.controls = true; }, 600); // 600ms Hold
-      };
-      const endPress = () => {
-         clearTimeout(pressTimer);
-      };
+      const startPress = () => { pressTimer = setTimeout(() => { vid.controls = true; }, 600); };
+      const endPress = () => { clearTimeout(pressTimer); };
 
       vid.addEventListener('touchstart', startPress);
       vid.addEventListener('touchend', endPress);
       vid.addEventListener('mousedown', startPress);
       vid.addEventListener('mouseup', endPress);
-      // Safety: if touch moves (swipe), cancel hold
       vid.addEventListener('touchmove', endPress);
 
       vid.addEventListener('loadedmetadata', () => {
@@ -785,7 +843,6 @@
   function closeModal() {
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
-    // Reset fullscreen on close
     if (document.fullscreenElement) document.exitFullscreen();
     
     currentOpenDocId = null;
