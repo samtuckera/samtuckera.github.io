@@ -26,7 +26,7 @@ body {
     display: flex; 
     flex-direction: column; 
     overflow: hidden; 
-  padding-top:15px;
+  padding-top:25px;
 }
 
 /* --- STEALTH MODE SCREEN (FAKE ERROR) --- */
@@ -321,5 +321,6 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .ctx-item.red { color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
 
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
 
 
