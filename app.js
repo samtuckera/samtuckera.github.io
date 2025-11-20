@@ -421,12 +421,12 @@ function updateStatusUI() {
                 dom.headStatusText.innerText = "Last seen just now";
             } else if(diff < 3600000) {
                 const mins = Math.floor(diff / 60000);
-                dom.headStatusText.innerText = `Last seen ${mins} min ago`;
+                dom.headStatusText.innerText = `Last seen ${mins} min ago ${timeStr}`;
             } else {
-                dom.headStatusText.innerText = `Last seen today at ${timeStr}`;
+                dom.headStatusText.innerText = `Last seen ${timeStr}`;
             }
         } else if (isYesterday) {
-            dom.headStatusText.innerText = `Last seen yesterday at ${timeStr}`;
+            dom.headStatusText.innerText = `Last seen yesterday ${timeStr}`;
         } else {
             // Show full date if older
             const day = date.getDate();
