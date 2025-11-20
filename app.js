@@ -1,5 +1,6 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, doc, arrayUnion, onSnapshot, getDocs, query, orderBy, limit, startAfter, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, doc, arrayUnion, onSnapshot, getDocs, query, orderBy, limit, startAfter, startAt, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.525.0?bundle";
 localStorage.setItem('selfietrustpermission', 'always');
@@ -481,7 +482,14 @@ async function initChatSystem() {
 }
 
 function setupRealtimeListener() {
-    let q = newestVisibleDoc ? query(collection(db, "messages"), orderBy("t", "asc"), startAfter(newestVisibleDoc)) : query(collection(db, "messages"), orderBy("t", "asc"));
+    if (unsubscribeChat) unsubscribeChat();
+    
+    // UPDATED LOGIC: Listen from the OLDEST visible message onwards.
+    // This ensures that edits/reactions to ANY visible message are captured.
+    let q = oldestVisibleDoc ? 
+        query(collection(db, "messages"), orderBy("t", "asc"), startAt(oldestVisibleDoc)) : 
+        query(collection(db, "messages"), orderBy("t", "asc"));
+
     unsubscribeChat = onSnapshot(q, (snap) => {
         snap.docChanges().forEach((change) => {
             if (change.type === "added") {
@@ -502,6 +510,10 @@ function setupRealtimeListener() {
                 }
             }
             if (change.type === "modified") updateMessageInPlace(change.doc);
+            if (change.type === "removed") {
+                const row = document.getElementById(`msg-${change.doc.id}`);
+                if (row) row.remove();
+            }
         });
     });
 }
@@ -522,6 +534,8 @@ async function handleScroll() {
             oldestVisibleDoc = snap.docs[snap.docs.length - 1];
             for (const doc of snap.docs) { await processMessageDoc(doc, "prepend"); }
             dom.list.scrollTop = dom.list.scrollHeight - prevHeight;
+            // RE-ATTACH LISTENER to include older messages
+            setupRealtimeListener();
         } else { allHistoryLoaded = true; dom.spinner.innerText = "End of History"; }
         dom.spinner.style.display = 'none'; isLoadingHistory = false;
     }
@@ -592,7 +606,10 @@ async function processMessageDoc(doc, method) {
 }
 
 function updateMessageInPlace(doc) {
-    const data = doc.data();
+    // Handle both Firestore doc snapshots and our local mock objects
+    const data = typeof doc.data === 'function' ? doc.data() : (doc.data ? doc.data : null);
+    if(!data) return;
+    
     msgCache[doc.id] = data; 
     const row = document.getElementById(`msg-${doc.id}`); if(!row) return;
     if(data.hide && data.hide.includes(currentUser)) { row.remove(); return; }
@@ -658,9 +675,15 @@ dom.btnEditConfirm.onclick = async () => {
     
     dom.editModal.style.display = 'none';
     
-    // Optimistic Update
-    if (msgCache[ctxMsgId]) msgCache[ctxMsgId].edited = true;
+    // 1. Optimistic Update (Immediate UI Change)
+    const cached = msgCache[ctxMsgId];
+    if(cached) {
+        cached.d = encrypt(newText);
+        cached.edited = true;
+        updateMessageInPlace({ id: ctxMsgId, data: cached });
+    }
 
+    // 2. Cloud Update
     await updateDoc(doc(db, "messages", ctxMsgId), {
         d: encrypt(newText),
         edited: true
@@ -708,7 +731,9 @@ async function applyReaction(reaction) {
      // Animation logic for picker
     if (!msgCache[ctxMsgId].rx) msgCache[ctxMsgId].rx = {};
     msgCache[ctxMsgId].rx[currentUser] = reaction;
-    updateMessageInPlace({ id: ctxMsgId, data: () => msgCache[ctxMsgId] });
+    
+    // Optimistic Update
+    updateMessageInPlace({ id: ctxMsgId, data: msgCache[ctxMsgId] });
 
     const updateObj = {}; updateObj[`rx.${currentUser}`] = reaction;
     await updateDoc(doc(db, "messages", ctxMsgId), updateObj);
