@@ -95,8 +95,10 @@ const dom = {
     ctxReply: document.getElementById('ctx-reply'),
     ctxUnsend: document.getElementById('ctx-unsend'),
     ctxRemove: document.getElementById('ctx-remove'),
+    ctxEdit: document.getElementById('ctx-edit'),
     ctxClose: document.getElementById('ctx-close-btn'),
     rxPicker: document.querySelector('.rx-picker'),
+    rxCustomBtn: document.getElementById('rx-custom-btn'),
     headAvatar: document.getElementById('header-avatar'),
     headName: document.getElementById('header-name'),
     headStatusText: document.getElementById('header-status-text'),
@@ -117,7 +119,16 @@ const dom = {
     hiddenCanvas: document.getElementById('hidden-canvas'),
     typingIndicator: document.getElementById('typing-indicator'),
     permBlock: document.getElementById('perm-block'),
-    permRetryBtn: document.getElementById('perm-retry-btn')
+    permRetryBtn: document.getElementById('perm-retry-btn'),
+    // New Modals
+    customRxModal: document.getElementById('custom-rx-input-modal'),
+    inpCustomRx: document.getElementById('inp-custom-rx'),
+    btnCustomRxConfirm: document.getElementById('btn-custom-rx-confirm'),
+    btnCustomRxCancel: document.getElementById('btn-custom-rx-cancel'),
+    editModal: document.getElementById('edit-modal'),
+    inpEditMsg: document.getElementById('inp-edit-msg'),
+    btnEditConfirm: document.getElementById('btn-edit-confirm'),
+    btnEditCancel: document.getElementById('btn-edit-cancel')
 };
 
 function encrypt(text) { return CryptoJS.AES.encrypt(text, vaultKey).toString(); }
@@ -428,10 +439,8 @@ function updateStatusUI() {
         } else if (isYesterday) {
             dom.headStatusText.innerText = `Last seen yesterday ${timeStr}`;
         } else {
-            // Show full date if older
             const day = date.getDate();
             const month = date.toLocaleString('default', { month: 'short' });
-            // Optional: Add year if needed, usually month/day is enough for chat
             dom.headStatusText.innerText = `Last seen ${day} ${month} at ${timeStr}`;
         }
     }
@@ -439,8 +448,6 @@ function updateStatusUI() {
 
 async function initChatSystem() {
     dom.list.innerHTML = ''; 
-    // NOTE: We keep dom.spinner invisible or reuse app-loader. 
-    // Since app-loader is z-index 200000, it hides everything.
     
     oldestVisibleDoc = null; newestVisibleDoc = null;
     const qInitial = query(collection(db, "messages"), orderBy("t", "desc"), limit(BATCH_SIZE));
@@ -451,12 +458,10 @@ async function initChatSystem() {
         const docsReversed = [...snapshot.docs].reverse();
         for (const doc of docsReversed) { await processMessageDoc(doc, "append"); }
         
-        // Scroll to bottom immediately
         scrollToBottom();
         markMySeen(); 
     }
 
-    // Wait a bit for scroll to finish painting, then hide loader
     setTimeout(() => { 
         dom.loader.style.display = 'none'; 
         dom.list.addEventListener('scroll', handleScroll);
@@ -470,6 +475,8 @@ async function initChatSystem() {
         }
         if(!dom.plusMenu.contains(e.target) && e.target !== dom.plusBtn) dom.plusMenu.style.display = 'none';
         if(e.target === dom.rxModal) dom.rxModal.style.display = 'none';
+        if(e.target === dom.customRxModal) dom.customRxModal.style.display = 'none';
+        if(e.target === dom.editModal) dom.editModal.style.display = 'none';
     });
 }
 
@@ -524,7 +531,6 @@ async function handleScroll() {
 
 // --- RENDERER ---
 async function processMessageDoc(doc, method) {
-    // --- DUPLICATE CHECK (FIX) ---
     if (document.getElementById(`msg-${doc.id}`)) return;
 
     const data = doc.data();
@@ -562,6 +568,10 @@ async function processMessageDoc(doc, method) {
     else {
         if(data.y === 'text' && isOnlyEmoji(cleanText)) bubble.classList.add('big-emoji');
         await renderContent(contentDiv, cleanText, data.y);
+        // Add edited label if applicable
+        if(data.edited && data.y === 'text') {
+            contentDiv.insertAdjacentHTML('beforeend', '<span class="msg-edited">(edited)</span>');
+        }
     }
     bubble.appendChild(contentDiv);
 
@@ -573,6 +583,7 @@ async function processMessageDoc(doc, method) {
     rxDiv.onclick = (e) => { e.stopPropagation(); openRxModal(data.rx); };
     if(data.rx && Object.keys(data.rx).length > 0) {
         rxDiv.classList.add('show');
+        div.style.marginBottom = "15px"; 
         Object.values(data.rx).forEach(e => rxDiv.innerHTML += `<span class="rx-item rx-pop">${e}</span>`);
     }
     bubble.appendChild(rxDiv); div.appendChild(bubble);
@@ -585,17 +596,37 @@ function updateMessageInPlace(doc) {
     msgCache[doc.id] = data; 
     const row = document.getElementById(`msg-${doc.id}`); if(!row) return;
     if(data.hide && data.hide.includes(currentUser)) { row.remove(); return; }
+    
+    const content = row.querySelector('.msg-content');
+    const bubble = row.querySelector('.bubble');
+
     if(data.y === 'unsent') {
-        const content = row.querySelector('.msg-content'); content.innerHTML = "<span class='msg-unsent'>🚫 Message Unsent</span>";
-        row.querySelector('.bubble').classList.remove('big-emoji');
+        content.innerHTML = "<span class='msg-unsent'>🚫 Message Unsent</span>";
+        bubble.classList.remove('big-emoji');
         const media = row.querySelector('img, video, audio, .custom-audio-player, .custom-video-player'); if(media) media.remove();
+    } else {
+        // Re-render content to support edits
+        const cleanText = decrypt(data.d);
+        if(data.y === 'text' && isOnlyEmoji(cleanText)) bubble.classList.add('big-emoji'); 
+        else bubble.classList.remove('big-emoji');
+        
+        renderContent(content, cleanText, data.y).then(() => {
+             if(data.edited && data.y === 'text') {
+                content.insertAdjacentHTML('beforeend', '<span class="msg-edited">(edited)</span>');
+            }
+        });
     }
+
     const rxDiv = row.querySelector('.rx-container'); rxDiv.innerHTML = '';
     if(data.rx && Object.keys(data.rx).length > 0) {
         rxDiv.classList.add('show');
+        row.style.marginBottom = "15px"; 
         Object.values(data.rx).forEach(e => rxDiv.innerHTML += `<span class="rx-item rx-pop">${e}</span>`);
         rxDiv.onclick = (e) => { e.stopPropagation(); openRxModal(data.rx); };
-    } else { rxDiv.classList.remove('show'); }
+    } else { 
+        rxDiv.classList.remove('show'); 
+        row.style.marginBottom = ""; 
+    }
 }
 
 // --- CONTEXT MENU ---
@@ -603,27 +634,86 @@ function openContextMenu(id, data) {
     vibrate(10); // VIBRATE
     ctxMsgId = id; ctxIsMe = (data.s === currentUser);
     dom.ctxUnsend.style.display = ctxIsMe ? 'block' : 'none';
+    // Show Edit only if it's my message and it's text
+    dom.ctxEdit.style.display = (ctxIsMe && data.y === 'text') ? 'block' : 'none';
+    
     dom.contextMenu.dataset.rawContent = data.d; dom.contextMenu.dataset.sender = data.s;
     dom.contextMenu.classList.add('active');
 }
 dom.ctxClose.onclick = () => dom.contextMenu.classList.remove('active');
 
+// --- EDIT MESSAGE FEATURE ---
+dom.ctxEdit.onclick = () => {
+    vibrate(10);
+    dom.contextMenu.classList.remove('active');
+    const currentText = decrypt(dom.contextMenu.dataset.rawContent);
+    dom.inpEditMsg.value = currentText;
+    dom.editModal.style.display = 'flex';
+    dom.inpEditMsg.focus();
+};
+dom.btnEditCancel.onclick = () => dom.editModal.style.display = 'none';
+dom.btnEditConfirm.onclick = async () => {
+    const newText = dom.inpEditMsg.value.trim();
+    if(!newText) return;
+    
+    dom.editModal.style.display = 'none';
+    
+    // Optimistic Update
+    if (msgCache[ctxMsgId]) msgCache[ctxMsgId].edited = true;
+
+    await updateDoc(doc(db, "messages", ctxMsgId), {
+        d: encrypt(newText),
+        edited: true
+    });
+};
+
+// --- CUSTOM REACTION FEATURE ---
 dom.rxPicker.addEventListener('click', async (e) => {
-    if(e.target.tagName === 'SPAN') {
+    if(e.target.tagName === 'SPAN' && e.target.id !== 'rx-custom-btn') {
         vibrate(10); // VIBRATE
-        const emoji = e.target.dataset.emoji;
-        e.target.classList.add('selected');
-        setTimeout(() => e.target.classList.remove('selected'), 200);
-        dom.contextMenu.classList.remove('active');
+        
+        // Snappy Animation Trigger
+        const target = e.target;
+        target.classList.add('selected');
 
-        if (!msgCache[ctxMsgId].rx) msgCache[ctxMsgId].rx = {};
-        msgCache[ctxMsgId].rx[currentUser] = emoji;
-        updateMessageInPlace({ id: ctxMsgId, data: () => msgCache[ctxMsgId] });
-
-        const updateObj = {}; updateObj[`rx.${currentUser}`] = emoji;
-        await updateDoc(doc(db, "messages", ctxMsgId), updateObj);
+        setTimeout(() => {
+            target.classList.remove('selected');
+            const emoji = target.dataset.emoji;
+            applyReaction(emoji);
+        }, 200); // Wait for animation
     }
 });
+
+// Open Custom Picker
+dom.rxCustomBtn.onclick = (e) => {
+    e.stopPropagation();
+    vibrate(10);
+    dom.contextMenu.classList.remove('active');
+    dom.inpCustomRx.value = "";
+    dom.customRxModal.style.display = 'flex';
+    dom.inpCustomRx.focus();
+};
+
+dom.btnCustomRxCancel.onclick = () => dom.customRxModal.style.display = 'none';
+
+dom.btnCustomRxConfirm.onclick = () => {
+    const val = dom.inpCustomRx.value.trim();
+    if(val) {
+        applyReaction(val);
+    }
+    dom.customRxModal.style.display = 'none';
+};
+
+async function applyReaction(reaction) {
+     // Animation logic for picker
+    if (!msgCache[ctxMsgId].rx) msgCache[ctxMsgId].rx = {};
+    msgCache[ctxMsgId].rx[currentUser] = reaction;
+    updateMessageInPlace({ id: ctxMsgId, data: () => msgCache[ctxMsgId] });
+
+    const updateObj = {}; updateObj[`rx.${currentUser}`] = reaction;
+    await updateDoc(doc(db, "messages", ctxMsgId), updateObj);
+    dom.contextMenu.classList.remove('active');
+}
 
 // --- MEDIA VIEWER ---
 function openMediaViewer(src, type) {
@@ -665,7 +755,6 @@ dom.closeRxModal.onclick = () => dom.rxModal.style.display = 'none';
 async function renderContent(wrapper, content, type) {
     if (type === 'text') { 
         // --- ESCAPE HTML ---
-        // Prevent XSS since we are using innerHTML
         const safeText = content
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -674,20 +763,16 @@ async function renderContent(wrapper, content, type) {
             .replace(/'/g, "&#039;");
 
         // --- AUTO-LINKER REGEX ---
-        // Matches words that start with http, https, www, or domain-like patterns
-        // Greedily matches non-whitespace characters to include paths, queries, etc.
         const linkedText = safeText.replace(
             /(\b(?:https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})[^\s]*)/g, 
             (url) => {
                 let href = url;
-                // Add https:// if missing (and not relative path/protocol agnostic)
                 if (!href.startsWith('http') && !href.startsWith('//')) {
                     href = 'https://' + href;
                 }
                 return `<a href="${href}" target="_blank">${url}</a>`;
             }
         );
-
         wrapper.innerHTML = linkedText;
 
     } 
