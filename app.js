@@ -524,6 +524,9 @@ async function handleScroll() {
 
 // --- RENDERER ---
 async function processMessageDoc(doc, method) {
+    // --- DUPLICATE CHECK (FIX) ---
+    if (document.getElementById(`msg-${doc.id}`)) return;
+
     const data = doc.data();
     msgCache[doc.id] = data; 
     if(data.hide && data.hide.includes(currentUser)) return;
