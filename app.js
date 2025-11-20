@@ -25,7 +25,7 @@ const r2Config = {
 // --- UPDATED USERS ---
 const USERS = { 
     "sam10": { name: "Sam", avatar: "sam10.png" },
-    "mastura10": { name: "Mastura", avatar: "mastura10.png" }
+    "mastura10": { name: "Tsunade", avatar: "ts.png" }
 };
 const UNKNOWN_USER = { name: "Unknown", avatar: "https://ui-avatars.com/api/?name=?" };
 
