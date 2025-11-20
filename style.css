@@ -1,7 +1,3 @@
-/* --- CUSTOM FONT SETUP --- */
-/* Replace 'myfont.ttf' with your font file path or URL */
-/* --- NOTO COLOR EMOJI SETUP (Scoped) --- */
-/* Used as a fallback for colorful emojis on systems that lack them */
 @font-face {
   font-family: 'Noto Color Emoji';
   src: local('Noto Color Emoji');
@@ -26,7 +22,7 @@ body {
     display: flex; 
     flex-direction: column; 
     overflow: hidden; 
-  padding-top:25px;
+  padding-top:15px;
 }
 
 /* --- STEALTH MODE SCREEN (FAKE ERROR) --- */
@@ -168,7 +164,7 @@ body {
     display: flex; 
     justify-content: flex-end; 
     padding: 15px; 
-    background: rgb(0 0 0 / 0%); 
+    background: rgba(0,0,0,0.5); 
     position: absolute; 
     top: 0; 
     width: 100%; 
@@ -217,32 +213,36 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 #header-status-text { font-size: 11px; color: #888; }
 
 /* --- MESSAGES LIST --- */
-#msg-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; overflow-x: hidden; }
+#msg-list {    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    overflow-x: hidden;}
 #loading-spinner { display: none; width: 100%; text-align: center; padding: 10px; color: #007AFF; font-size: 12px; }
 
 /* --- BUBBLES --- */
-.msg-row { display: flex; width: 100%; position: relative; transition: transform 0.1s linear; will-change: transform; margin-bottom: 20px; align-items: flex-end; } 
+.msg-row { display: flex; width: 100%; position: relative; transition: transform 0.1s linear; will-change: transform; margin-bottom: 2px; align-items: flex-end; } 
 .me { justify-content: flex-end; } .other { justify-content: flex-start; }
 .msg-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; margin-right: 8px; margin-bottom: 4px; }
 .bubble { 
-    max-width: 75%; 
-    padding: 8px 12px; 
-    border-radius: 18px; 
-    position: relative; 
-    font-size: 16px; 
-    line-height: 1.4; 
-    display: flex; 
-    flex-direction: column; 
-    min-width: 70px; 
-    /* Fix for long text overflow */
-    overflow-wrap: anywhere; 
-}
+    max-width: 70%;
+    padding: 8px 12px;
+    border-radius: 18px;
+    position: relative;
+    font-size: 16px;
+    display: flex;
+    flex-direction: column;
+    min-width: 70px;
+    overflow-wrap: anywhere;}
 .me .bubble { background: #007AFF; color: white; border-bottom-right-radius: 2px; }
 .other .bubble { background: #262628; color: #e0e0e0; border-bottom-left-radius: 2px; }
 .bubble.big-emoji { background: transparent !important; box-shadow: none !important; padding: 0; font-size: 3rem; line-height: 1.1; }
 .bubble.big-emoji .msg-time { color: rgba(255,255,255,0.5); text-shadow: 0 1px 2px black; }
 .msg-meta { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 2px; gap: 8px; }
 .msg-time { font-size: 9px; opacity: 0.7; align-self: flex-end; white-space: nowrap; }
+.msg-edited { font-size: 9px; opacity: 0.6; font-style: italic; margin-left: 4px; }
 .msg-sender { font-size: 9px; opacity: 0.5; font-weight: bold; }
 .msg-unsent { font-style: italic; opacity: 0.6; font-size: 14px; color: #aaa; }
 .reply-header { font-size: 11px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.1); border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -255,7 +255,7 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .other .bubble a { color: #007AFF !important; }
 
 /* --- REACTIONS & ANIMATION --- */
-.rx-container { display: none; position: absolute; bottom: -16px; right: 0; background: #222; border: 2px solid #000; border-radius: 12px; padding: 2px 6px; font-size: 11px; gap: 2px; z-index: 2; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+.rx-container { display: none; position: absolute; bottom: -16px; right: 0; background: #222; border: 2px solid #000; border-radius: 12px; padding: 2px 6px; font-size: 11px; gap: 2px; z-index: 2; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5); max-width: 200px; flex-wrap: wrap; }
 .rx-container.show { display: flex; }
 .rx-item { display: inline-block; transform-origin: center; }
 .rx-pop { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
@@ -268,8 +268,10 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 
 /* --- CONTEXT MENU ANIMATIONS --- */
 .rx-picker { display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; padding: 0 10px; }
-.rx-picker span { cursor: pointer; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: inline-block; }
+/* UPDATED: Faster transition for snappy feel */
+.rx-picker span { cursor: pointer; transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: inline-block; }
 .rx-picker span.selected { transform: scale(2.5); }
+#rx-custom-btn { font-weight: bold; color: #007AFF; }
 
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index: 200; align-items: center; justify-content: center; }
 .modal-content { background: #1c1c1e; width: 80%; max-width: 300px; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #333; }
@@ -277,6 +279,23 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 #reaction-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; text-align: left; }
 .rx-detail-row { display: flex; align-items: center; gap: 10px; font-size: 14px; border-bottom: 1px solid #333; padding-bottom: 8px; }
 #close-rx-modal { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; width: 100%; }
+
+/* INPUT MODAL STYLES */
+.modal-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #2c2c2e;
+    color: white;
+    font-size: 16px;
+    margin-bottom: 15px;
+    outline: none;
+}
+.modal-btns { display: flex; gap: 10px; justify-content: center; }
+.modal-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+.btn-primary { background: #007AFF; color: white; }
+.btn-cancel { background: #333; color: white; }
 
 /* --- MEDIA --- */
 .media-content { max-width: 100%; border-radius: 12px; display: block; margin-bottom: 2px; }
@@ -321,6 +340,3 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .ctx-item.red { color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
 
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
-
-
