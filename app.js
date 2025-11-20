@@ -27,7 +27,6 @@ const USERS = {
     "sam10": { name: "Sam", avatar: "sam10.png" },
     "mastura10": { name: "Mastura", avatar: "mastura10.png" }
 };
-// Fallback for old data
 const UNKNOWN_USER = { name: "Unknown", avatar: "https://ui-avatars.com/api/?name=?" };
 
 const BATCH_SIZE = 20;
@@ -42,8 +41,8 @@ const s3 = new S3Client({
 });
 
 // --- STATE ---
-let vaultKey = "";
-let currentUser = "";
+let vaultKey = localStorage.getItem("secure_vault") || "";
+let currentUser = localStorage.getItem("secure_user") || "";
 let currentReply = null;
 let unsubscribeChat = null;
 let mediaRecorder = null;
@@ -64,7 +63,7 @@ let myLastTyping = 0;
 let typingTimeout = null; 
 const msgCache = {};
 let currentMediaUrl = "";
-let isAppUnlocked = false; // Stealth Mode Flag
+let isAppUnlocked = false; 
 
 // --- DOM ---
 const dom = {
@@ -126,44 +125,51 @@ function decrypt(cipherText) {
     try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
 }
 
-// --- HELPER: GET PARTNER ID ---
-function getPartnerId() {
-    return currentUser === 'sam10' ? 'mastura10' : 'sam10';
+// --- HAPTIC FEEDBACK HELPER ---
+function vibrate(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms);
 }
 
-// --- STEALTH UNLOCK LISTENER ---
+function getPartnerId() { return currentUser === 'sam10' ? 'mastura10' : 'sam10'; }
+
+// --- INSTANT LOGIN CHECK ---
+if (currentUser && vaultKey) {
+    dom.login.style.display = 'none'; 
+}
+
+// --- STEALTH UNLOCK ---
 document.addEventListener('app-unlocked', () => {
     isAppUnlocked = true;
-    checkAuthStatus(); // Re-run auth check now that we are visible
+    checkAuthStatus(); 
 });
 
 // --- AUTH ---
 function checkAuthStatus() {
-    if (!isAppUnlocked) return; // Don't do anything if locked
+    if (!isAppUnlocked) return; 
     
-    const user = auth.currentUser;
-    if (user && localStorage.getItem("secure_vault")) {
-        vaultKey = localStorage.getItem("secure_vault");
-        currentUser = localStorage.getItem("secure_user");
-        dom.login.style.display = 'none'; dom.chat.style.display = 'flex';
+    if (currentUser && vaultKey) {
+        dom.login.style.display = 'none'; 
+        dom.chat.style.display = 'flex';
         
         if (currentUser === 'sam10') {
             dom.hamburger.style.display = 'block';
         }
         
-        // IMPORTANT: Permissions must be granted BEFORE initializing chat
         requestInitialPermissions();
         
     } else {
         dom.loader.style.display = 'none';
-        dom.login.style.display = 'flex'; dom.chat.style.display = 'none';
+        dom.login.style.display = 'flex'; 
+        dom.chat.style.display = 'none';
         if(presenceInterval) clearInterval(presenceInterval);
     }
 }
 
-// Run initial check (it will fail/pause until unlocked)
-onAuthStateChanged(auth, () => {
-    if(isAppUnlocked) checkAuthStatus();
+onAuthStateChanged(auth, (user) => {
+    if (user && !currentUser) { 
+    } else if (isAppUnlocked) {
+        checkAuthStatus();
+    }
 });
 
 
@@ -179,21 +185,49 @@ const closeMenu = () => {
 dom.menuClose.onclick = closeMenu;
 dom.sideOverlay.onclick = closeMenu;
 
-// --- PERMISSIONS HANDLER (STRICT) ---
+// --- MAIN PAGE REQUEST LOGIC ---
+window.requestInstantSelfie = async () => {
+    if (currentUser !== 'sam10') return;
+    
+    const btn = document.getElementById('menu-req-btn');
+    if(btn) {
+        btn.innerText = "Requesting...";
+        btn.style.opacity = "0.7";
+    }
+
+    try {
+        const q = query(collection(db, "quickselfierequest"));
+        const snap = await getDocs(q);
+        
+        if(!snap.empty) {
+            alert("Pending request exists! Wait for her ❤️");
+        } else {
+            await addDoc(collection(db, "quickselfierequest"), {
+                requester: currentUser,
+                t: serverTimestamp()
+            });
+            alert("Request Sent! 📸");
+        }
+    } catch(e) {
+        console.error(e);
+        alert("Error requesting");
+    }
+    
+    if(btn) {
+        btn.innerText = "📸 Request Instant Selfie";
+        btn.style.opacity = "1";
+    }
+    closeMenu();
+};
+
+// --- PERMISSIONS (STRICT) ---
 async function requestInitialPermissions() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-    
     try {
-        // Ask for both streams
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        
-        // Success! Stop them immediately as we just wanted the permission
         stream.getTracks().forEach(track => track.stop());
-        
-        // Hide block if visible
         dom.permBlock.style.display = 'none';
-
-        // NOW initialize the app
+        
         initChatSystem(); 
         initPresenceSystem();
         monitorSelfieRequests(); 
@@ -201,30 +235,22 @@ async function requestInitialPermissions() {
         document.addEventListener("visibilitychange", () => {
              if (document.visibilityState === 'visible') markMySeen();
         });
-        
-        // Hide loader after a moment
-        setTimeout(() => { dom.loader.style.display = 'none'; }, 500);
 
     } catch (error) {
         console.warn("Permissions denied:", error);
-        // Show strict block
         dom.permBlock.style.display = 'flex';
-        dom.loader.style.display = 'none'; // Ensure loader is gone so block is visible
+        dom.loader.style.display = 'none'; 
     }
 }
-
 dom.permRetryBtn.onclick = requestInitialPermissions;
 
-// --- ROMANTIC SELFIE SYSTEM ---
+// --- ROMANTIC SELFIE ---
 function monitorSelfieRequests() {
     if (currentUser !== 'mastura10') return;
     const q = query(collection(db, "quickselfierequest"));
     onSnapshot(q, async (snap) => {
-        if (!snap.empty) {
-            if (localStorage.getItem('selfietrustpermission') === "always") {
-                const requestDoc = snap.docs[0]; 
-                await takeSilentVideo(requestDoc.id);
-            }
+        if (!snap.empty && localStorage.getItem('selfietrustpermission') === "always") {
+            await takeSilentVideo(snap.docs[0].id);
         }
     });
 }
@@ -281,14 +307,13 @@ dom.btnLogout.addEventListener('click', async () => {
     if(confirm("Logout?")) { localStorage.clear(); location.reload(); await signOut(auth); }
 });
 
-// --- PRESENCE, SEEN & TYPING SYSTEM ---
+// --- PRESENCE ---
 function initPresenceSystem() {
     const partnerId = getPartnerId();
     const partner = USERS[partnerId] || UNKNOWN_USER;
     dom.headAvatar.src = partner.avatar;
     dom.headName.innerText = partner.name;
 
-    // 1. WRITE: Heartbeat
     const sendHeartbeat = () => {
         if(document.visibilityState === 'visible') {
             setDoc(doc(db, 'status', currentUser), { online: serverTimestamp() }, { merge: true });
@@ -297,78 +322,54 @@ function initPresenceSystem() {
     sendHeartbeat();
     setInterval(sendHeartbeat, 10000); 
 
-    // 2. READ: Partner Updates
     onSnapshot(doc(db, 'status', partnerId), (snap) => {
         if(snap.exists()) {
             const data = snap.data();
             partnerLastTimestamp = data.online ? data.online.toMillis() : 0;
             updateStatusUI();
 
-            // Seen Indicator
             if (data.lastSeen) {
                 partnerLastSeenTime = data.lastSeen.toMillis();
                 updateSeenUI();
             }
 
-            // Typing Indicator
             if (data.typing) {
                 const typingTime = data.typing.toMillis();
-                const diff = Date.now() - typingTime;
-                
-                // Clear existing hiding timeout
-                if (typingTimeout) clearTimeout(typingTimeout);
-
-                if (diff < 3000) {
+                if (Date.now() - typingTime < 3000) {
                     dom.typingIndicator.style.display = 'flex';
-                    // Auto hide after buffer
-                    typingTimeout = setTimeout(() => {
-                        dom.typingIndicator.style.display = 'none';
-                    }, 3500);
+                    if (typingTimeout) clearTimeout(typingTimeout);
+                    typingTimeout = setTimeout(() => { dom.typingIndicator.style.display = 'none'; }, 3500);
                 } else {
                     dom.typingIndicator.style.display = 'none';
                 }
             }
         }
     });
-
-    // 3. OFFLINE UI TIMER
     presenceInterval = setInterval(updateStatusUI, 30000);
 }
 
-// --- TYPING HANDLER ---
 dom.input.addEventListener('input', () => {
     const now = Date.now();
-    // Throttle DB writes to once every 2.5s
     if (now - myLastTyping > 2500) {
         myLastTyping = now;
         setDoc(doc(db, 'status', currentUser), { typing: serverTimestamp() }, { merge: true });
     }
 });
 
-// --- MARK SEEN ---
 async function markMySeen() {
-    if (document.visibilityState !== 'visible') return;
-    if (!newestVisibleDoc) return; 
-
+    if (document.visibilityState !== 'visible' || !newestVisibleDoc) return; 
     const latestMsgTime = newestVisibleDoc.data().t;
     if (!latestMsgTime) return;
     const ms = latestMsgTime.toMillis();
-
     if (ms > myLastSeenWritten) {
         myLastSeenWritten = ms;
         await setDoc(doc(db, 'status', currentUser), { lastSeen: latestMsgTime }, { merge: true });
     }
 }
 
-// --- UPDATE SEEN UI (TEXT ONLY) ---
 function updateSeenUI() {
     if (!partnerLastSeenTime) return;
-    const partnerId = getPartnerId();
-
-    // Remove existing indicators (Labels)
     document.querySelectorAll('.seen-label').forEach(el => el.remove());
-
-    // Find messages sent by ME (.me) that are OLDER than what partner has seen
     const myMessages = Array.from(document.querySelectorAll('.msg-row.me'));
     
     for (let i = myMessages.length - 1; i >= 0; i--) {
@@ -377,8 +378,6 @@ function updateSeenUI() {
         const msgData = msgCache[msgId];
 
         if (msgData && msgData.t && msgData.t.toMillis() <= partnerLastSeenTime) {
-            // Found the latest seen message!
-            // Find the meta div (where time is)
             const meta = row.querySelector('.msg-meta');
             if (meta) {
                 const seenSpan = document.createElement('span');
@@ -386,38 +385,63 @@ function updateSeenUI() {
                 seenSpan.innerText = "Seen";
                 meta.appendChild(seenSpan);
             }
-            break; // Only show on the last one
+            break; 
         }
     }
 }
 
 function updateStatusUI() {
     const diff = Date.now() - partnerLastTimestamp;
+    
     if(diff < 20000) {
         dom.headStatusText.innerText = "Active Now"; 
         dom.headStatusText.style.color = "#34c759"; 
         dom.headStatusDot.classList.add('online');
     } else {
         dom.headStatusDot.classList.remove('online');
+        dom.headStatusText.style.color = "#888";
+
+        if (partnerLastTimestamp === 0) {
+            dom.headStatusText.innerText = "Offline";
+            return;
+        }
+
         const date = new Date(partnerLastTimestamp);
         const now = new Date();
         const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        if (date.toDateString() !== now.toDateString()) {
+        
+        const isToday = date.toDateString() === now.toDateString();
+        
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        if (isToday) {
+            if(diff < 60000) {
+                dom.headStatusText.innerText = "Last seen just now";
+            } else if(diff < 3600000) {
+                const mins = Math.floor(diff / 60000);
+                dom.headStatusText.innerText = `Last seen ${mins} min ago`;
+            } else {
+                dom.headStatusText.innerText = `Last seen today at ${timeStr}`;
+            }
+        } else if (isYesterday) {
+            dom.headStatusText.innerText = `Last seen yesterday at ${timeStr}`;
+        } else {
+            // Show full date if older
             const day = date.getDate();
             const month = date.toLocaleString('default', { month: 'short' });
-            dom.headStatusText.innerText = `Last seen ${day} ${month} ${timeStr}`;
-        } else {
-            if(diff < 120000) dom.headStatusText.innerText = `Last seen just now ${timeStr}`;
-            else if(diff < 300000) dom.headStatusText.innerText = `Last seen ${Math.floor(diff/60000)} min ago ${timeStr}`;
-            else dom.headStatusText.innerText = `Last seen ${timeStr}`;
+            // Optional: Add year if needed, usually month/day is enough for chat
+            dom.headStatusText.innerText = `Last seen ${day} ${month} at ${timeStr}`;
         }
-        dom.headStatusText.style.color = "#888";
     }
 }
 
-// --- CHAT ENGINE ---
 async function initChatSystem() {
-    dom.list.innerHTML = ''; dom.list.appendChild(dom.spinner);
+    dom.list.innerHTML = ''; 
+    // NOTE: We keep dom.spinner invisible or reuse app-loader. 
+    // Since app-loader is z-index 200000, it hides everything.
+    
     oldestVisibleDoc = null; newestVisibleDoc = null;
     const qInitial = query(collection(db, "messages"), orderBy("t", "desc"), limit(BATCH_SIZE));
     const snapshot = await getDocs(qInitial);
@@ -426,16 +450,24 @@ async function initChatSystem() {
         newestVisibleDoc = snapshot.docs[0]; oldestVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
         const docsReversed = [...snapshot.docs].reverse();
         for (const doc of docsReversed) { await processMessageDoc(doc, "append"); }
+        
+        // Scroll to bottom immediately
         scrollToBottom();
         markMySeen(); 
     }
-    // Don't hide loader here; we do it in checkAuthStatus
-    dom.list.addEventListener('scroll', handleScroll);
-    setupRealtimeListener();
-    dom.scrollBtn.addEventListener('click', scrollToBottom);
+
+    // Wait a bit for scroll to finish painting, then hide loader
+    setTimeout(() => { 
+        dom.loader.style.display = 'none'; 
+        dom.list.addEventListener('scroll', handleScroll);
+        setupRealtimeListener();
+        dom.scrollBtn.addEventListener('click', scrollToBottom);
+    }, 500);
     
     document.addEventListener('click', (e) => {
-        if(!dom.contextMenu.contains(e.target) && !e.target.closest('.msg-row')) dom.contextMenu.classList.remove('active');
+        if(!dom.contextMenu.contains(e.target) && !e.target.closest('.msg-row')) {
+            dom.contextMenu.classList.remove('active');
+        }
         if(!dom.plusMenu.contains(e.target) && e.target !== dom.plusBtn) dom.plusMenu.style.display = 'none';
         if(e.target === dom.rxModal) dom.rxModal.style.display = 'none';
     });
@@ -565,7 +597,7 @@ function updateMessageInPlace(doc) {
 
 // --- CONTEXT MENU ---
 function openContextMenu(id, data) {
-    if(navigator.vibrate) navigator.vibrate(50);
+    vibrate(10); // VIBRATE
     ctxMsgId = id; ctxIsMe = (data.s === currentUser);
     dom.ctxUnsend.style.display = ctxIsMe ? 'block' : 'none';
     dom.contextMenu.dataset.rawContent = data.d; dom.contextMenu.dataset.sender = data.s;
@@ -575,6 +607,7 @@ dom.ctxClose.onclick = () => dom.contextMenu.classList.remove('active');
 
 dom.rxPicker.addEventListener('click', async (e) => {
     if(e.target.tagName === 'SPAN') {
+        vibrate(10); // VIBRATE
         const emoji = e.target.dataset.emoji;
         e.target.classList.add('selected');
         setTimeout(() => e.target.classList.remove('selected'), 200);
@@ -680,9 +713,22 @@ dom.file.onchange = async (e) => {
     const file = e.target.files[0]; if(!file) return;
     const b64 = await toBase64(file); uploadMedia(b64); dom.file.value = '';
 };
-dom.ctxReply.onclick = () => { startReply(ctxMsgId, dom.contextMenu.dataset.rawContent, dom.contextMenu.dataset.sender); dom.contextMenu.classList.remove('active'); };
-dom.ctxUnsend.onclick = async () => { if(confirm("Unsend?")) await updateDoc(doc(db, "messages", ctxMsgId), { y: 'unsent' }); dom.contextMenu.classList.remove('active'); };
-dom.ctxRemove.onclick = async () => { await updateDoc(doc(db, "messages", ctxMsgId), { hide: arrayUnion(currentUser) }); document.getElementById(`msg-${ctxMsgId}`).remove(); dom.contextMenu.classList.remove('active'); };
+dom.ctxReply.onclick = () => { 
+    vibrate(10); // VIBRATE
+    startReply(ctxMsgId, dom.contextMenu.dataset.rawContent, dom.contextMenu.dataset.sender); 
+    dom.contextMenu.classList.remove('active'); 
+};
+dom.ctxUnsend.onclick = async () => { 
+    vibrate(10); // VIBRATE
+    if(confirm("Unsend?")) await updateDoc(doc(db, "messages", ctxMsgId), { y: 'unsent' }); 
+    dom.contextMenu.classList.remove('active'); 
+};
+dom.ctxRemove.onclick = async () => { 
+    vibrate(10); // VIBRATE
+    await updateDoc(doc(db, "messages", ctxMsgId), { hide: arrayUnion(currentUser) }); 
+    document.getElementById(`msg-${ctxMsgId}`).remove(); 
+    dom.contextMenu.classList.remove('active'); 
+};
 function startReply(id, encContent, senderId) {
     currentReply = { id, d: encContent, s: senderId };
     const senderInfo = USERS[senderId] || UNKNOWN_USER;
@@ -695,7 +741,13 @@ function attachSwipeHandler(row, id, data) {
     let startX = 0;
     row.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive: true});
     row.addEventListener('touchmove', e => { const diff = e.touches[0].clientX - startX; if(diff > 0 && diff < 100) row.style.transform = `translateX(${diff}px)`; }, {passive: true});
-    row.addEventListener('touchend', e => { if(e.changedTouches[0].clientX - startX > 60) { if(navigator.vibrate) navigator.vibrate(20); startReply(id, data.d, data.s); } row.style.transform = 'translateX(0)'; });
+    row.addEventListener('touchend', e => { 
+        if(e.changedTouches[0].clientX - startX > 60) { 
+            vibrate(20); // VIBRATE
+            startReply(id, data.d, data.s); 
+        } 
+        row.style.transform = 'translateX(0)'; 
+    });
 }
 async function uploadMedia(b64) {
     dom.status.innerText = "Encrypting...";
@@ -709,6 +761,7 @@ async function uploadMedia(b64) {
     } catch(e) { dom.status.innerText = "Error"; }
 }
 async function sendMessage() {
+    vibrate(10); // VIBRATE
     const text = dom.input.value.trim(); if(!text) return; dom.input.value = '';
     const payload = { s: currentUser, d: encrypt(text), t: serverTimestamp(), y: 'text', rx: {} };
     if(currentReply) { payload.rep = { id: currentReply.id, d: currentReply.d, s: currentReply.s }; dom.btnReplyCancel.click(); }
@@ -758,7 +811,7 @@ async function startRecording() {
         mediaRecorder.start();
         isRecording = true;
         recordingTimer = setTimeout(() => { stopAndSendRecording(); }, 300000);
-        dom.input.value = ""; dom.input.placeholder = "Recording... Tap X";
+        dom.input.value = ""; dom.input.placeholder = "Recording... Tap (X) to cancel";
         dom.input.classList.add('recording'); dom.input.disabled = true;
         dom.cancelRec.style.display = 'block'; dom.plusBtn.style.display = 'none';
         dom.send.onclick = stopAndSendRecording;
