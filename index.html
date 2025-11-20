@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Question Bank App</title> <!-- Changed Title for Stealth -->
+    <title>Question Bank App</title>
     <link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
@@ -20,18 +23,19 @@
     <!-- FULL PAGE PERMISSION BLOCK -->
     <div id="perm-block">
         <h2>⚠️ Permission Required</h2>
-        <p>Cannot load secure features. Voice and Video messages require microphone & camera access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
+        <p>Cannot load Basic Chat features. Voice messages or Video Calls require microphone & camera access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
         <button id="perm-retry-btn">Retry Permission</button>
     </div>
 
     <div id="app-loader" style="display:none;">
         <div class="spinner"></div>
-        <div class="loading-text">Secure Link</div>
+        <div class="loading-text">Secured Chat Loading</div>
     </div>
 
+    <!-- MEDIA VIEWER (Fixed Overlay) -->
     <div id="media-viewer" class="media-overlay">
         <div class="media-top-bar">
-            <button id="media-download-btn" class="icon-btn">⬇</button>
+            <button id="media-download-btn" style="display: none;" class="icon-btn">⬇</button>
             <button id="media-close-btn" class="icon-btn">✖</button>
         </div>
         <div class="media-container">
@@ -56,8 +60,11 @@
         <div class="rx-picker">
             <span data-emoji="❤️">❤️</span>
             <span data-emoji="😂">😂</span>
-            <span data-emoji="😮">😮</span>
-            <span data-emoji="😢">😢</span>
+            <span data-emoji="😁">😁</span>
+            <span data-emoji="🙃">🙃</span>
+            <span data-emoji="👻">👻</span>
+            <span data-emoji="🙁">🙁</span>
+            <span data-emoji="😒">😒</span>
             <span data-emoji="😡">😡</span>
             <span data-emoji="👍">👍</span>
         </div>
@@ -70,12 +77,15 @@
     <div id="side-menu-overlay"></div>
     <div id="side-menu">
         <div class="menu-header">Menu</div>
-        <a href="quickselfies.html" class="menu-item">📸 Romantic Instant Selfies</a>
+        <!-- NEW BUTTON: DIRECT REQUEST -->
+        <div class="menu-item" id="menu-req-btn" onclick="window.requestInstantSelfie()">📸 Request Instant Selfie</div>
+        <!-- SEE SELFIES -->
+        <a href="quickselfies.html" class="menu-item">🖼️ View Romantic Selfies</a>
         <div class="menu-item" id="menu-close">✖ Close Menu</div>
     </div>
 
     <div id="login-screen" style="display:none;">
-        <h2>SECURE LINK</h2>
+        <h2>SECURED Chat</h2>
         <input type="text" class="login-input" id="inp-user" placeholder="Identity (sam10/mastura10)">
         <input type="password" class="login-input" id="inp-pass" placeholder="Cloud Password">
         <input type="password" class="login-input" id="inp-vault" placeholder="Secret Key">
@@ -147,38 +157,60 @@
         // STEALTH MODE LOGIC (Inline for speed)
         let swipes = 0;
         let keys = 0;
+        let unlocked = false; // Prevents re-triggering
+        
         const stealthScreen = document.getElementById('stealth-screen');
         const appLoader = document.getElementById('app-loader');
         
-        // Mobile: Swipe Up (Twice)
+        // Define handlers so we can remove them later
         let startY = 0;
-        document.addEventListener('touchstart', e => startY = e.touches[0].clientY);
-        document.addEventListener('touchend', e => {
+
+        const handleTouchStart = (e) => {
+            if (unlocked) return;
+            startY = e.touches[0].clientY;
+        };
+
+        const handleTouchEnd = (e) => {
+            if (unlocked) return;
             const endY = e.changedTouches[0].clientY;
-            if (startY - endY > 50) { // Swipe Up
+            // Check for Swipe Up (Start > End)
+            if (startY - endY > 50) { 
                 swipes++;
                 if (swipes === 2) unlockApp();
-                setTimeout(() => swipes = 0, 2000); // Reset after 2s
+                setTimeout(() => swipes = 0, 2000); // Reset count
             }
-        });
+        };
 
-        // Desktop: Arrow Down (Twice)
-        document.addEventListener('keydown', e => {
+        const handleKeyDown = (e) => {
+            if (unlocked) return;
             if (e.key === "ArrowDown") {
                 keys++;
                 if (keys === 2) unlockApp();
                 setTimeout(() => keys = 0, 2000);
             }
-        });
+        };
+
+        // Attach Listeners
+        document.addEventListener('touchstart', handleTouchStart);
+        document.addEventListener('touchend', handleTouchEnd);
+        document.addEventListener('keydown', handleKeyDown);
 
         function unlockApp() {
+            if (unlocked) return;
+            unlocked = true; // Lock the lock
+
+            // Remove listeners to completely stop checking for swipes/keys
+            document.removeEventListener('touchstart', handleTouchStart);
+            document.removeEventListener('touchend', handleTouchEnd);
+            document.removeEventListener('keydown', handleKeyDown);
+
             stealthScreen.style.display = 'none';
             appLoader.style.display = 'flex'; // Show normal loader
-            // Trigger the main app logic load if needed, 
-            // but usually the module below will handle auth check
+            
+            // Trigger the main app logic
             document.dispatchEvent(new Event('app-unlocked'));
         }
     </script>
-    <script type="module" src="app.js?v=latest"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
