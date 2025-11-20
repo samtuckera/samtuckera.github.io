@@ -5,16 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Romantic Moments — Optimized</title>
 
-  <!-- CryptoJS (you already used this) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script>
+  
+  <script>
 (() => {
   const PASSWORD = 'samshow1010';
   const LS_KEY = 'romantic_last_unlock';
   const HIDE_CLASS = 'romantic-hidden-overlay';
   const HOUR_MS = 60 * 60 * 1000;
 
-  // Create overlay
   const overlay = document.createElement('div');
   overlay.id = 'romantic-auth-overlay';
   overlay.style.position = 'fixed';
@@ -31,7 +30,6 @@
   overlay.style.boxSizing = 'border-box';
   overlay.style.padding = '20px';
 
-  // Inner card
   const card = document.createElement('div');
   card.style.maxWidth = '420px';
   card.style.width = '100%';
@@ -43,21 +41,18 @@
   card.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial';
   card.style.textAlign = 'center';
 
-  // Title
   const title = document.createElement('div');
   title.textContent = 'Enter password to view';
   title.style.fontSize = '18px';
   title.style.marginBottom = '12px';
   title.style.color = '#ff6b6b';
 
-  // Subtext
   const sub = document.createElement('div');
   sub.textContent = 'Password required once per hour';
   sub.style.fontSize = '12px';
   sub.style.color = '#bdbdbd';
   sub.style.marginBottom = '18px';
 
-  // Input
   const input = document.createElement('input');
   input.type = 'password';
   input.placeholder = 'Password';
@@ -73,7 +68,6 @@
   input.style.outline = 'none';
   input.style.marginBottom = '12px';
 
-  // Row for button
   const btn = document.createElement('button');
   btn.textContent = 'Go';
   btn.style.display = 'inline-block';
@@ -87,14 +81,12 @@
   btn.style.color = '#fff';
   btn.style.fontWeight = '600';
 
-  // Message
   const msg = document.createElement('div');
   msg.style.fontSize = '13px';
   msg.style.marginTop = '10px';
   msg.style.minHeight = '18px';
   msg.style.color = '#ff9b9b';
 
-  // Small "unlock time" display
   const info = document.createElement('div');
   info.style.fontSize = '11px';
   info.style.color = '#9aa4b2';
@@ -107,18 +99,14 @@
   card.appendChild(msg);
   card.appendChild(info);
   overlay.appendChild(card);
-
-  // Add to DOM but hidden initially (we'll decide after check)
   document.documentElement.appendChild(overlay);
 
-  // Helpers
   function now() { return Date.now(); }
   function setLastUnlock(ts) { try { localStorage.setItem(LS_KEY, String(ts)); } catch(e) {} }
   function getLastUnlock() { try { const v = localStorage.getItem(LS_KEY); return v ? Number(v) : 0; } catch(e) { return 0; } }
   function clearMessage() { msg.textContent = ''; }
   function showMessage(text, short=false) { msg.textContent = text; if(!short) setTimeout(clearMessage, 4000); }
 
-  // Show or hide overlay based on last unlock
   function evaluateOverlay() {
     const last = getLastUnlock();
     if (last && (now() - last) < HOUR_MS) {
@@ -149,17 +137,14 @@
     overlay.style.display = 'flex';
     input.value = '';
     input.focus();
-    // prevent scrolling behind
     document.documentElement.style.overflow = 'hidden';
   }
 
   function hideOverlay() {
     overlay.style.display = 'none';
-    // allow scroll again
     document.documentElement.style.overflow = '';
   }
 
-  // Attempt unlock
   function attemptUnlock() {
     const val = input.value || '';
     if (!val) {
@@ -179,98 +164,161 @@
     }
   }
 
-  // Events
   btn.addEventListener('click', attemptUnlock);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') attemptUnlock();
   });
 
-  // Periodically re-evaluate (in case hour passes while page open)
   setInterval(() => {
     const last = getLastUnlock();
     if (!last) return;
     if ((now() - last) >= HOUR_MS) {
-      // show overlay only if currently hidden
       if (overlay.style.display === 'none' || overlay.style.display === '') {
-        // show again
         showOverlay();
         updateInfo();
       } else {
         updateInfo();
       }
     } else {
-      // update countdown text
       updateInfo();
     }
-  }, 10 * 1000); // check every 10s
+  }, 10 * 1000);
 
-  // Prevent clicks from interacting with underlying page when overlay visible
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) input.focus();
   });
 
-  // Initial check
-  try {
-    evaluateOverlay();
-  } catch (e) {
-    // if anything goes wrong, ensure overlay is visible (fail-safe)
-    showOverlay();
-    console.error('Auth overlay init error', e);
-  }
+  try { evaluateOverlay(); } catch (e) { showOverlay(); console.error(e); }
 
-  // Expose a tiny API to allow hiding/showing via console if needed (optional)
   window.__romanticAuth = {
     forceLock: () => { localStorage.removeItem(LS_KEY); showOverlay(); },
     forceUnlock: () => { setLastUnlock(now()); hideOverlay(); }
   };
 })();
-</script>
-
+  </script>
 
   <style>
-    :root { --bg: #000; --card: #0b0b0b; --muted: #9aa4b2; }
-    html,body { height:100%; margin:0; background:var(--bg); color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+    :root { --bg: #000; --card: #0b0b0b; --muted: #9aa4b2; --primary: #ff3b30; }
+    html,body { height:100%; margin:0; background:#3b3b3b; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
     .wrap { padding:20px; max-width:1100px; margin:0 auto; }
-    h2 { text-align:center; color:#ff3b30; letter-spacing:1px; margin-bottom:18px; }
+    h2 { text-align:center; color:var(--primary); letter-spacing:1px; margin-bottom:18px; }
     #request-btn { display:none; background:linear-gradient(45deg,#ff3b30,#ff2d55); color:#fff; border:none; padding:12px 20px; border-radius:20px; font-weight:600; cursor:pointer; margin: 0 auto 16px; display:block; max-width:260px; }
 
     .gallery { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
-    .photo-card { position:relative; border-radius:12px; overflow:hidden; background:#111; aspect-ratio:3/4; box-shadow:0 2px 8px rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; }
-    .photo-card .placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; gap:8px; flex-direction:column; color:#aaa; font-size:13px; padding:12px; text-align:center; }
-    .photo-card.loading { background: linear-gradient(90deg,#111 0px,#222 40px,#111 80px); background-size:600px; animation:shimmer 1.5s infinite linear; }
-    .photo-date { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#ccc; font-size:10px; padding:6px; text-align:center; pointer-events:none; }
+    
+    .photo-card { 
+        position:relative; 
+        border-radius:12px; 
+        overflow:hidden; 
+        background:#111; 
+        aspect-ratio:3/4; 
+        box-shadow:0 2px 8px rgba(0,0,0,0.5); 
+        display:flex; 
+        align-items:center; 
+        justify-content:center; 
+        cursor:pointer; 
+        user-select:none;
+        transition: transform 0.2s;
+    }
+    .photo-card:active { transform: scale(0.98); }
+
+    /* Thumbnail Image Style */
+    .photo-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        opacity: 0; /* Hidden until loaded */
+        transition: opacity 0.3s ease;
+    }
+    .photo-thumb.loaded { opacity: 1; }
+
+    .photo-card .placeholder { 
+        width:100%; height:100%; 
+        display:flex; align-items:center; justify-content:center; 
+        gap:8px; flex-direction:column; 
+        color:#aaa; font-size:13px; padding:12px; text-align:center;
+        z-index: 0;
+    }
+    
+    .photo-date { 
+        position:absolute; bottom:0; left:0; right:0; 
+        background:linear-gradient(to top, rgba(0,0,0,0.9), transparent); 
+        color:#fff; font-size:10px; padding:12px 6px 6px; 
+        text-align:center; pointer-events:none; 
+        z-index: 3; text-shadow: 0 1px 2px #000;
+    }
+    
+    /* Number Tag */
+    .photo-number {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(4px);
+        color: #fff;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        z-index: 3;
+        font-weight: 700;
+        font-family: monospace;
+    }
+
+    /* Viewed Tick */
+    .viewed-tick {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: #2ecc71;
+        color: #000;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        z-index: 3;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
 
     .loader { text-align:center; color:var(--muted); margin-top:10px; display:none; }
 
-    @keyframes shimmer { 0% { background-position:-200px 0 } 100% { background-position:200px 0 } }
-
-    /* modal */
-    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:999999; background:rgba(0,0,0,0.85); }
+    /* Modal */
+    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:999999; background:rgba(0,0,0,0.95); }
     .modal.open { display:flex; }
-    .modal-content { position:relative; width:clamp(300px,90vw,1000px); max-height:90vh; border-radius:12px; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
-    .modal video { max-width:100%; max-height:100%; display:block; }
-    .modal .close { position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; border:none; font-size:20px; width:40px; height:40px; border-radius:999px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-    /* play/pause toggle button */
+    .modal-content { position:relative; width:clamp(300px,90vw,1000px); max-height:100%;overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
+    .modal video { max-width:100%; max-height:100%; display:block;outline: none; }
+    .modal .close { position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; border:none; font-size:20px; width:40px; height:40px; border-radius:999px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index: 10; }
     .modal .toggle {
-      position:absolute;
-      top:10px;
-      right:60px;
-      background:rgba(0,0,0,0.55);
-      color:#fff;
-      border:none;
-      font-size:22px;
-      width:40px;
-      height:40px;
-      border-radius:999px;
-      cursor:pointer;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      user-select:none;
+      position:absolute; top:10px; right:60px;
+      background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:22px; width:40px; height:40px;
+      border-radius:999px; cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; z-index: 10;
     }
-    .modal .hint { position:absolute; bottom:8px; left:10px; right:10px; text-align:center; color:#ddd; font-size:13px; pointer-events:none; }
+    .modal .hint { position:absolute; bottom:8px; left:10px; right:10px; text-align:center; color:#ddd; font-size:13px; pointer-events:none; text-shadow:0 1px 3px #000; z-index: 10; }
 
     .back-link { display:block; text-align:center; margin-top:18px; color:#007AFF; text-decoration:none; font-size:14px; }
+    
+    /* Skeleton Loader for Modal */
+    .skeleton-overlay {
+        position: absolute; inset: 0;
+        background: #1a1a1a;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        z-index: 5;
+    }
+    .skeleton-shimmer {
+        width: 100%; height: 100%;
+        background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+    @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    
+    /* Spinner inside skeleton */
     .spinner { width:36px; height:36px; border-radius:50%; border:4px solid rgba(255,255,255,0.08); border-top-color:#ff6b6b; animation:spin 1s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg) } }
 
@@ -287,14 +335,19 @@
     <a href="index.html" class="back-link">← Back to Chat</a>
   </div>
 
-  <!-- modal for playing one video -->
   <div id="modal" class="modal" aria-hidden="true">
     <div class="modal-content" role="dialog" aria-modal="true">
       <button id="modal-close" class="close" title="Close">✕</button>
       <button id="modal-toggle" class="toggle" title="Play / Pause">▶️</button>
-      <!-- video element inserted dynamically -->
-      <div id="modal-spinner" style="position:absolute;display:none;"><div class="spinner"></div></div>
-      <div class="hint">Tap video to pause/play • Tap outside or ✕ to close</div>
+      
+      <div id="modal-skeleton" class="skeleton-overlay" style="display:none;">
+        <div class="skeleton-shimmer" style="position:absolute;inset:0;"></div>
+        <div style="position:relative;z-index:2;text-align:center;">
+            <div class="spinner" style="margin:0 auto 10px;"></div>
+            <div style="font-size:12px;color:#888;">Decrypting Secure Memory...</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -305,7 +358,92 @@
   } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
   import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 
-  // ============ CONFIG ============
+  // ============ INDEXED DB HELPER ============
+  const DB_NAME = "RomanticGalleryDB";
+  const DB_VERSION = 1;
+  const STORE_NAME = "metadata"; // Stores: { id: "docId", number: 100, viewed: bool, thumbnail: "base64" }
+  const CONFIG_STORE = "config"; // Stores: { id: "max_number", value: 100 }
+
+  let idb = null;
+
+  const initDB = () => {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(CONFIG_STORE)) {
+                db.createObjectStore(CONFIG_STORE, { keyPath: "id" });
+            }
+        };
+        request.onsuccess = (e) => { idb = e.target.result; resolve(idb); };
+        request.onerror = (e) => reject(e);
+    });
+  };
+
+  // Get Metadata for a specific doc ID
+  const getMeta = async (docId) => {
+    if (!idb) await initDB();
+    return new Promise((resolve) => {
+        const tx = idb.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(docId);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+    });
+  };
+
+  // Save Metadata (merging)
+  const saveMeta = async (docId, data) => {
+    if (!idb) await initDB();
+    const current = await getMeta(docId) || { id: docId };
+    const merged = { ...current, ...data };
+    return new Promise((resolve) => {
+        const tx = idb.transaction(STORE_NAME, "readwrite");
+        tx.objectStore(STORE_NAME).put(merged);
+        tx.oncomplete = () => resolve(merged);
+    });
+  };
+
+  // Assign a unique number starting at 100 if not exists
+  const assignNumberIfNeeded = async (docId) => {
+    if (!idb) await initDB();
+    // Check if exists
+    const existing = await getMeta(docId);
+    if (existing && existing.number) return existing.number;
+
+    return new Promise((resolve) => {
+        const tx = idb.transaction([STORE_NAME, CONFIG_STORE], "readwrite");
+        const configStore = tx.objectStore(CONFIG_STORE);
+        
+        // Get max number
+        const req = configStore.get("max_number");
+        req.onsuccess = () => {
+            let nextNum = 100;
+            if (req.result) {
+                nextNum = req.result.value + 1;
+            }
+            
+            // Update config
+            configStore.put({ id: "max_number", value: nextNum });
+            
+            // Update metadata store logic requires separate handling inside transaction scope ideally, 
+            // but for brevity in this helper structure:
+            const metaStore = tx.objectStore(STORE_NAME);
+            const metaReq = metaStore.get(docId);
+            metaReq.onsuccess = () => {
+                const record = metaReq.result || { id: docId };
+                record.number = nextNum;
+                metaStore.put(record);
+            }
+            resolve(nextNum);
+        };
+    });
+  };
+
+  // ============ FIREBASE CONFIG ============
   const firebaseConfig = {
     apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
     authDomain: "sas-chat-61205.firebaseapp.com",
@@ -320,7 +458,6 @@
     '9bX4Pye70VNymSt0CIZYBg7U47I3'
   ];
 
-  // page settings
   const PAGE_SIZE = 20;
 
   // ============ INIT ============
@@ -338,82 +475,113 @@
   const modalContent = modal.querySelector('.modal-content');
   const modalClose = document.getElementById('modal-close');
   const modalToggle = document.getElementById('modal-toggle');
-  const modalSpinner = document.getElementById('modal-spinner');
+  const modalSkeleton = document.getElementById('modal-skeleton');
 
-  // user-owned UI flag (not security)
   const vaultKey = localStorage.getItem("secure_vault");
   const currentUserLabel = localStorage.getItem("secure_user");
 
-  // helpers
+  // state
+  let lastDoc = null;
+  let loadingMore = false;
+  let reachedEnd = false;
+  let liveUnsubscribe = null;
+  let activeBlobUrl = null;
+  let activeVideoEl = null;
+  
+  // Navigation State
+  let currentOpenDocId = null; // To track where we are for next/prev
+
+  // Helpers
   function showMainLoader(show=true) { loader.style.display = show ? 'block' : 'none'; if (show) loaderSpinner.innerHTML = '<div class="spinner"></div>'; else loaderSpinner.innerHTML=''; }
   function decryptWithKey(cipherText) {
     try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
   }
   async function dataURItoBlob(dataURI) {
-    // Using fetch gives browser chance to parse and avoids manual base64 decoding
     const res = await fetch(dataURI);
     return await res.blob();
   }
 
-  // show request button UI flag (same as before)
   if (currentUserLabel === 'sam10') {
     btn.style.display = 'block';
     btn.addEventListener('click', requestSelfie);
   }
 
-  // make auth persistence so index.html login survives across pages
   setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Persistence err', e));
 
-  // ============ PAGINATION STATE ============
-  let lastDoc = null;           // for server-side pagination (startAfter)
-  let loadingMore = false;
-  let reachedEnd = false;
-  let liveUnsubscribe = null;   // optional real-time on first page
-
-  // active modal/video state
-  let activeBlobUrl = null;
-  let activeVideoEl = null;
-
-  // modal controls
+  // Modal Events
   modalClose.addEventListener('click', closeModal);
-  modal.addEventListener('click', (ev) => {
-    // clicking outside modal-content closes modal
-    if (ev.target === modal) closeModal();
-  });
-
-  // Play/pause button handler
+  modal.addEventListener('click', (ev) => { if (ev.target === modal) closeModal(); });
   modalToggle.addEventListener('click', (ev) => {
     ev.stopPropagation();
     if (!activeVideoEl) return;
-    if (activeVideoEl.paused) {
-      activeVideoEl.play().catch(()=>{});
-    } else {
-      activeVideoEl.pause();
+    if (activeVideoEl.paused) activeVideoEl.play().catch(()=>{});
+    else activeVideoEl.pause();
+  });
+
+  // ============ NAVIGATION LOGIC ============
+  
+  function getCardList() {
+    return Array.from(document.querySelectorAll('.photo-card'));
+  }
+
+  function navigateGallery(direction) {
+    if (!currentOpenDocId || modal.style.display === 'none') return;
+    
+    const cards = getCardList();
+    const currentIndex = cards.findIndex(c => c.id === `card-${currentOpenDocId}`);
+    
+    if (currentIndex === -1) return;
+
+    let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+
+    if (nextIndex >= 0 && nextIndex < cards.length) {
+        // Emulate closing and opening next
+        const nextCard = cards[nextIndex];
+        // Extract data attached to the DOM element (we'll attach it in render)
+        if (nextCard.dataset.docId) {
+            // Need to fetch the docSnap associated. 
+            // Since we don't want to store heavy docSnaps in DOM, we can re-fetch from cache or 
+            // more simply: The render function logic had the docSnap in scope. 
+            // We will trigger the click event on the next card.
+            nextCard.click();
+        }
+    }
+  }
+
+  // Keyboard Nav
+  window.addEventListener('keydown', (e) => {
+    if (modal.style.display !== 'none') {
+        if (e.key === 'ArrowRight') navigateGallery('next');
+        if (e.key === 'ArrowLeft') navigateGallery('prev');
     }
   });
 
-  // Attach auth listener and gate the app
-  onAuthStateChanged(auth, async (user) => {
-    console.log('Auth changed ->', user ? user.uid : 'NOT SIGNED IN');
-    if (!user) { window.location.href = 'index.html'; return; }
-    if (!ALLOWED_UIDS.includes(user.uid)) { window.location.href = 'index.html'; return; }
-    if (!vaultKey) { window.location.href = 'index.html'; return; }
+  // Swipe Nav
+  let touchStartX = 0;
+  window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
+  window.addEventListener('touchend', e => {
+    if (modal.style.display === 'none') return;
+    const touchEndX = e.changedTouches[0].screenX;
+    if (touchStartX - touchEndX > 50) navigateGallery('next'); // Swipe Left -> Next
+    if (touchEndX - touchStartX > 50) navigateGallery('prev'); // Swipe Right -> Prev
+  });
 
-    // initial page load (first page uses onSnapshot for realtime of first page)
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user || !ALLOWED_UIDS.includes(user.uid) || !vaultKey) {
+      window.location.href = 'index.html'; return;
+    }
+    await initDB(); // Initialize IDB
     await loadFirstPage();
-    // attach infinite scroll handler
     initScrollListener();
   });
 
-  // ============ QUERY + LISTENERS ============
-
   async function loadFirstPage() {
     showMainLoader(true);
-    // unsubscribe if exists
     if (liveUnsubscribe) { liveUnsubscribe(); liveUnsubscribe = null; }
-    // query for latest PAGE_SIZE
+    
     const q = query(collection(db, "cuteselfies"), orderBy("t", "desc"), limit(PAGE_SIZE));
-    // Use onSnapshot for realtime updates *within* the first page
+    
     liveUnsubscribe = onSnapshot(q, (snapshot) => {
       showMainLoader(false);
       if (snapshot.empty) {
@@ -423,24 +591,15 @@
         return;
       }
 
-      // Reset gallery and re-render current (keeps latest order)
       gallery.innerHTML = '';
       snapshot.docs.forEach((docSnap) => {
         const idx = snapshot.docs.indexOf(docSnap);
         renderPlaceholderCard(docSnap, idx);
       });
 
-      // keep lastDoc for pagination (the last doc of this snapshot)
       lastDoc = snapshot.docs[snapshot.docs.length - 1];
       reachedEnd = snapshot.docs.length < PAGE_SIZE;
       endNote.style.display = reachedEnd ? 'block' : 'none';
-    }, (err) => {
-      console.error('snapshot error', err);
-      showMainLoader(false);
-      if (err && err.code === 'permission-denied') {
-        alert('Permission denied — auth failed or UID not allowed.');
-        window.location.href = 'index.html';
-      }
     });
   }
 
@@ -456,147 +615,201 @@
         endNote.style.display = 'block';
       } else {
         snap.docs.forEach((d, i) => {
-          // Append placeholders for each new doc
           renderPlaceholderCard(d, gallery.children.length + i);
         });
         lastDoc = snap.docs[snap.docs.length - 1];
         reachedEnd = snap.docs.length < PAGE_SIZE;
         endNote.style.display = reachedEnd ? 'block' : 'none';
       }
-    } catch (e) {
-      console.error('loadNextPage err', e);
-    } finally {
-      loadingMore = false;
-      showMainLoader(false);
-    }
+    } catch (e) { console.error(e); } finally { loadingMore = false; showMainLoader(false); }
   }
 
-  // Create a placeholder card (no content fetch/decrypt yet). On click -> fetch+decrypt and show modal.
-  function renderPlaceholderCard(docSnap, index) {
+  async function renderPlaceholderCard(docSnap, index) {
     const id = docSnap.id;
     const data = docSnap.data();
-    const dateText = data.t ? data.t.toDate().toLocaleDateString() + ' ' + data.t.toDate().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'Just now';
+    const dateText = data.t ? data.t.toDate().toLocaleDateString() : 'Recently';
+    
+    // 1. Get Local Metadata (Number, Viewed, Thumb)
+    let num = await assignNumberIfNeeded(id);
+    let meta = await getMeta(id);
+    let thumbBase64 = meta ? meta.thumbnail : null;
+    let isViewed = meta ? meta.viewed : false;
 
-    // create card
     const card = document.createElement('div');
     card.className = 'photo-card';
     card.id = `card-${id}`;
-    // show a small thumbnail-like placeholder; you can customize to show a stored 'thumb' field if you have one
+    card.dataset.docId = id; // For navigation lookup
+
+    // Number Tag
+    const numTag = document.createElement('div');
+    numTag.className = 'photo-number';
+    numTag.textContent = `#${num}`;
+    card.appendChild(numTag);
+
+    // Viewed Tick
+    if (isViewed) {
+        const tick = document.createElement('div');
+        tick.className = 'viewed-tick';
+        tick.innerHTML = '✓';
+        card.appendChild(tick);
+    }
+
+    // Content
     const placeholder = document.createElement('div');
     placeholder.className = 'placeholder';
-    placeholder.innerHTML = `<div style="font-size:28px;">🎬</div><div style="opacity:0.8">Tap to load</div><div style="font-size:12px;color:#777;margin-top:6px;">${dateText}</div>`;
+    
+    // Thumb image if exists
+    if (thumbBase64) {
+        const img = document.createElement('img');
+        img.src = thumbBase64;
+        img.className = 'photo-thumb';
+        img.onload = () => img.classList.add('loaded');
+        card.appendChild(img);
+    }
+
+    placeholder.innerHTML = `<div style="font-size:28px;">🎬</div>`;
     card.appendChild(placeholder);
-    // date overlay (keeps parity with your previous UI)
+
     const dateEl = document.createElement('div');
     dateEl.className = 'photo-date';
     dateEl.textContent = dateText;
     card.appendChild(dateEl);
 
-    // click handler: lazy load full data only when user requests
     card.addEventListener('click', (e) => {
-      // avoid double clicks
       card.style.pointerEvents = 'none';
       openItemModal(docSnap).finally(() => {
         card.style.pointerEvents = '';
+        // Refresh tick mark if it was just viewed
+        if (!card.querySelector('.viewed-tick')) {
+            const tick = document.createElement('div');
+            tick.className = 'viewed-tick';
+            tick.innerHTML = '✓';
+            card.appendChild(tick);
+        }
       });
     });
 
-    // Insert at index (to preserve sort order)
     const children = gallery.children;
     if (index >= children.length) gallery.appendChild(card); else gallery.insertBefore(card, children[index]);
   }
 
-  // ============ MODAL / LAZY LOAD ============
+  // ============ GENERATE THUMBNAIL ============
+  function generateThumbnail(videoEl, docId) {
+    // We need to create a canvas, draw the frame, and save to IDB
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth / 2; // Scale down slightly for performance/storage
+        canvas.height = videoEl.videoHeight / 2;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        saveMeta(docId, { thumbnail: dataUrl });
+        
+        // Update UI instantly if possible
+        const card = document.getElementById(`card-${docId}`);
+        if (card && !card.querySelector('.photo-thumb')) {
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.className = 'photo-thumb loaded';
+            card.appendChild(img); // Append ensures it sits over placeholder but under text
+        }
+    } catch(e) {
+        console.warn("Thumb gen failed", e);
+    }
+  }
+
+  // ============ MODAL LOAD ============
   async function openItemModal(docSnap) {
-    // show spinner
-    modalSpinner.style.display = 'block';
-    modalSpinner.innerHTML = '<div class="spinner"></div>';
+    currentOpenDocId = docSnap.id;
+    
+    // Show Skeleton
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
-
-    // reset toggle while loading
-    modalToggle.textContent = '▶️';
+    modalSkeleton.style.display = 'flex';
+    modalToggle.style.display = 'none'; // Hide controls during load
 
     try {
-      // We expect docSnap.data().d to be encrypted URL (urlEnc)
       const data = docSnap.data();
-      const urlEnc = data.d;
-      // 1) decrypt urlEnc -> actual fetch URL for encrypted payload
-      const fetchUrl = decryptWithKey(urlEnc);
-      if (!fetchUrl) throw new Error('Failed to decrypt fetch URL');
+      const fetchUrl = decryptWithKey(data.d);
+      if (!fetchUrl) throw new Error('Decrypt URL failed');
 
-      // 2) fetch encrypted payload (text) from your R2 / storage
       const resp = await fetch(fetchUrl);
-      if (!resp.ok) throw new Error('Failed to fetch media');
-
+      if (!resp.ok) throw new Error('Fetch failed');
       const encryptedText = await resp.text();
-
-      // 3) decrypt encryptedText -> dataURI (base64)
       const dataUri = decryptWithKey(encryptedText);
-      if (!dataUri) throw new Error('Failed to decrypt media content');
+      if (!dataUri) throw new Error('Decrypt content failed');
 
-      // 4) convert to blob and create object URL
       const blob = await dataURItoBlob(dataUri);
       const blobUrl = URL.createObjectURL(blob);
-      // cleanup previous blob if any
+      
       if (activeBlobUrl) { try { URL.revokeObjectURL(activeBlobUrl); } catch(e){} }
       activeBlobUrl = blobUrl;
 
-      // 5) create video element (autoplay triggered after metadata load). Attach click handler for pause/play
       const vid = document.createElement('video');
-      vid.controls = true;
+      vid.controls = false;
       vid.playsInline = true;
       vid.src = blobUrl;
       vid.style.maxWidth = '100%';
       vid.style.maxHeight = '100%';
-      vid.preload = 'metadata'; // only metadata until play
-      vid.setAttribute('tabindex', '0');
+      vid.preload = 'auto';
+      
+      // Default Speed 0.5x
+      vid.playbackRate = 0.5;
 
-      // remove any previous video and attach
+      // remove prev
       const existing = modalContent.querySelector('video, img, .err-msg');
       if (existing) existing.remove();
+      
       modalContent.appendChild(vid);
       activeVideoEl = vid;
 
-      // When metadata is ready, autoplay (click to expand was user gesture so play should be allowed)
+      // Handle Loaded Metadata
       vid.addEventListener('loadedmetadata', () => {
+        // Set speed again to be safe
+        vid.playbackRate = 0.5;
+        
+        // Hide Skeleton
+        modalSkeleton.style.display = 'none';
+        modalToggle.style.display = 'flex';
+        modalToggle.textContent = '⏸️';
+        
         vid.play().catch(()=>{});
+
+        // Mark as Viewed
+        saveMeta(docSnap.id, { viewed: true });
+
+        // Generate Thumbnail if not exists
+        // We wait a bit to ensure frame is rendered or seek to middle
+        setTimeout(() => {
+            if (vid.duration && vid.duration > 0) {
+                // Need to seek to middle to get a good frame? 
+                // Note: Seeking might cause buffering. 
+                // Simplest approach: Just grab current frame after 1 second of play
+                // OR: Create a separate hidden video element to seek to middle (cleaner but heavier)
+                // Let's just grab the frame at 1s or current.
+                 generateThumbnail(vid, docSnap.id);
+            }
+        }, 1500);
       });
 
-      // update toggle icon on play/pause events
       vid.addEventListener('play', () => { modalToggle.textContent = '⏸️'; });
       vid.addEventListener('pause', () => { modalToggle.textContent = '▶️'; });
-
-      // tap-to-toggle play/pause inside modal (as requested)
-      vid.addEventListener('click', () => {
-        if (vid.paused) vid.play().catch(()=>{}); else vid.pause();
-      });
-
-      // keyboard: space toggles
+      vid.addEventListener('click', () => { if (vid.paused) vid.play(); else vid.pause(); });
       vid.addEventListener('keydown', (ev) => {
-        if (ev.code === 'Space') {
-          ev.preventDefault();
-          if (vid.paused) vid.play().catch(()=>{}); else vid.pause();
-        }
+        if (ev.code === 'Space') { ev.preventDefault(); if (vid.paused) vid.play(); else vid.pause(); }
       });
+      
+      // Focus for keys
+      setTimeout(()=>vid.focus(), 100);
 
-      // hide spinner once ready (or after short timeout)
-      const hideSpinner = () => { modalSpinner.style.display = 'none'; };
-      vid.addEventListener('canplay', hideSpinner);
-      // fallback: if canplay doesn't fire, hide after 2s
-      setTimeout(hideSpinner, 2000);
-
-      // focus video for keyboard control
-      setTimeout(()=>{ try { vid.focus(); } catch(e){} }, 150);
     } catch (err) {
-      console.error('openItemModal err', err);
-      modalSpinner.style.display = 'none';
-      // show a small error message inside modal
+      console.error(err);
+      modalSkeleton.style.display = 'none';
       const errMsg = document.createElement('div');
       errMsg.className = 'err-msg';
-      errMsg.style.padding = '18px';
       errMsg.style.color = '#f88';
-      errMsg.textContent = 'Unable to load this item.';
+      errMsg.textContent = 'Failed to load memory.';
       const existing = modalContent.querySelector('.err-msg');
       if (!existing) modalContent.appendChild(errMsg);
     }
@@ -605,7 +818,8 @@
   function closeModal() {
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
-    // cleanup video and blob
+    currentOpenDocId = null;
+    
     if (activeVideoEl) {
       try { activeVideoEl.pause(); } catch(e) {}
       activeVideoEl.remove();
@@ -615,25 +829,17 @@
       try { URL.revokeObjectURL(activeBlobUrl); } catch(e) {}
       activeBlobUrl = null;
     }
-    // reset toggle
     modalToggle.textContent = '▶️';
-    // remove any error messages
     const errMsg = modalContent.querySelector('.err-msg');
     if (errMsg) errMsg.remove();
-    modalSpinner.style.display = 'none';
   }
 
-  // ============ INFINITE SCROLL (simple) ============
   function initScrollListener() {
-    // Use scroll listener on window to detect near-bottom
     window.addEventListener('scroll', throttle(() => {
       if (loadingMore || reachedEnd) return;
       const scrolled = window.scrollY + window.innerHeight;
       const height = document.documentElement.scrollHeight;
-      // when user is within 650px from bottom, load next page
-      if (scrolled + 650 >= height) {
-        loadNextPage();
-      }
+      if (scrolled + 650 >= height) loadNextPage();
     }, 250));
   }
 
@@ -641,14 +847,10 @@
     let t = 0;
     return (...args) => {
       const now = Date.now();
-      if (now - t > wait) {
-        t = now;
-        fn(...args);
-      }
+      if (now - t > wait) { t = now; fn(...args); }
     };
   }
 
-  // ============ Request Selfie (keeps previous logic) ============
   async function requestSelfie() {
     btn.innerText = "Requesting...";
     btn.disabled = true;
@@ -658,16 +860,12 @@
         t: serverTimestamp()
       });
       alert("Request Sent! 📸");
-    } catch (e) {
-      console.error('request selfie failed', e);
-      alert('Request failed');
-    } finally {
+    } catch (e) { alert('Request failed'); } finally {
       btn.innerText = "📸 Request Instant Selfie";
       btn.disabled = false;
     }
   }
 
-  // Helpful: clean up blobs if user navigates away while modal open
   window.addEventListener('beforeunload', () => {
     if (activeBlobUrl) try { URL.revokeObjectURL(activeBlobUrl); } catch(e) {}
   });
