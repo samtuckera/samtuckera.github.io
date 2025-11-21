@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Question Bank App</title>
-    <link rel="stylesheet" href="style.css?v=114">
+    <link rel="stylesheet" href="style.css?v=115">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
@@ -12,7 +12,8 @@
 </head>
 <body>
 
-    <div id="stealth-screen">
+    <!-- Increased Z-Index to overlay everything including loader while loading in background -->
+    <div id="stealth-screen" style="z-index: 2147483647;">
         <div class="stealth-icon">⚠️</div>
         <div class="stealth-title">Server Unavailable</div>
         <div class="stealth-desc">The Question Bank server is currently down for maintenance. Please try again later.</div>
@@ -25,7 +26,7 @@
         <button id="perm-retry-btn">Retry Permission</button>
     </div>
 
-    <div id="app-loader" style="display:none;">
+    <div id="app-loader">
         <div class="spinner"></div>
         <div class="loading-text">Secured Chat Loading</div>
     </div>
@@ -103,7 +104,7 @@
             <span data-emoji="🙃">🙃</span>
             <span data-emoji="👻">👻</span>
             <span data-emoji="🙁">🙁</span>
-            <span data-emoji="😒">😒</span>
+            <span data-emoji="😡">😡</span>
             <span data-emoji="👍">👍</span>
             <span id="rx-custom-btn">➕</span>
         </div>
@@ -187,15 +188,14 @@
     </div>
 
     <script type="module">
-        // STEALTH MODE LOGIC (Inline for speed)
+        // STEALTH MODE LOGIC
         let swipes = 0;
         let keys = 0;
-        let unlocked = false; // Prevents re-triggering
+        let unlocked = false; 
         
         const stealthScreen = document.getElementById('stealth-screen');
-        const appLoader = document.getElementById('app-loader');
         
-        // Define handlers so we can remove them later
+        // Define handlers
         let startY = 0;
 
         const handleTouchStart = (e) => {
@@ -230,22 +230,24 @@
 
         function unlockApp() {
             if (unlocked) return;
-            unlocked = true; // Lock the lock
+            unlocked = true; 
 
-            // Remove listeners to completely stop checking for swipes/keys
+            // Remove listeners
             document.removeEventListener('touchstart', handleTouchStart);
             document.removeEventListener('touchend', handleTouchEnd);
             document.removeEventListener('keydown', handleKeyDown);
 
-            stealthScreen.style.display = 'none';
-            appLoader.style.display = 'flex'; // Show normal loader
+            // Smooth Fade Out
+            stealthScreen.style.transition = "opacity 0.4s ease-out";
+            stealthScreen.style.opacity = "0";
             
-            // Trigger the main app logic
-            document.dispatchEvent(new Event('app-unlocked'));
+            // Remove overlay after fade
+            setTimeout(() => {
+                stealthScreen.style.display = 'none';
+            }, 400);
         }
     </script>
-    <script type="module" src="app.js?v=1113"></script>
+    <script type="module" src="app.js?v=1117"></script>
     <script src="bganimator.js"></script>
 </body>
 </html>
-
