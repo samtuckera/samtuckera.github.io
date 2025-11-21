@@ -63,7 +63,10 @@ let myLastTyping = 0;
 let typingTimeout = null; 
 const msgCache = {};
 let currentMediaUrl = "";
-let isAppUnlocked = false; 
+// REMOVED: isAppUnlocked flag - App now loads immediately in background
+
+// NEW: Custom Emoji Map
+let customEmojiMap = {};
 
 // NEW: Store Custom Profiles
 // Structure: { uid: { name: "...", avatar: "data:image...", url: "https://..." } }
@@ -181,15 +184,13 @@ if (currentUser && vaultKey) {
     dom.login.style.display = 'none'; 
 }
 
-// --- STEALTH UNLOCK ---
-document.addEventListener('app-unlocked', () => {
-    isAppUnlocked = true;
-    checkAuthStatus(); 
-});
+// --- AUTO START (BACKGROUND LOADING) ---
+// App starts immediately. Stealth screen covers it via Z-Index.
+checkAuthStatus(); 
 
 // --- AUTH ---
 function checkAuthStatus() {
-    if (!isAppUnlocked) return; 
+    // REMOVED: if (!isAppUnlocked) return; 
     
     if (currentUser && vaultKey) {
         dom.login.style.display = 'none'; 
@@ -209,7 +210,8 @@ function checkAuthStatus() {
 
 onAuthStateChanged(auth, (user) => {
     if (user && !currentUser) { 
-    } else if (isAppUnlocked) {
+    } else {
+        // Update status if auth state resolves later
         checkAuthStatus();
     }
 });
@@ -464,6 +466,44 @@ function refreshMessageAvatars() {
     });
 }
 
+// --- CUSTOM EMOJI HELPER ---
+function replaceCustomEmojis(text) {
+    if (!text || !customEmojiMap) return text;
+    let newText = text;
+    Object.entries(customEmojiMap).forEach(([emoji, id]) => {
+        // Replace all instances of the emoji with the custom image
+        // Using replaceAll to catch all occurrences
+        newText = newText.replaceAll(emoji, `<img src="/custom_emoji/e (${id}).png" class="custom-emoji" alt="${emoji}">`);
+    });
+    return newText;
+}
+
+// NEW: Updates the static context menu to show custom images
+function updateContextMenuEmojis() {
+    const picker = document.querySelector('.rx-picker');
+    if(!picker) return;
+    const spans = picker.querySelectorAll('span:not(#rx-custom-btn)');
+    spans.forEach(span => {
+        const emoji = span.dataset.emoji; 
+        if(emoji && customEmojiMap[emoji]) {
+            span.innerHTML = replaceCustomEmojis(emoji);
+        }
+    });
+}
+
+async function loadCustomEmojis() {
+    try {
+        const res = await fetch('customemojilist.json');
+        if (res.ok) {
+            customEmojiMap = await res.json();
+            console.log("Custom Emojis Loaded:", customEmojiMap);
+            updateContextMenuEmojis(); // <--- Apply to context menu
+        }
+    } catch (e) {
+        console.warn("Failed to load custom emojis", e);
+    }
+}
+
 // --- PERMISSIONS (STRICT: AUDIO ONLY) ---
 async function requestInitialPermissions() {
     // Only requesting Audio for Voice Messages. No Camera.
@@ -640,6 +680,9 @@ function updateStatusUI() {
 async function initChatSystem() {
     dom.list.innerHTML = ''; 
     
+    // LOAD CUSTOM EMOJIS FIRST
+    await loadCustomEmojis();
+
     oldestVisibleDoc = null; newestVisibleDoc = null;
     const qInitial = query(collection(db, "messages"), orderBy("t", "desc"), limit(BATCH_SIZE));
     const snapshot = await getDocs(qInitial);
@@ -809,19 +852,39 @@ async function processMessageDoc(doc, method) {
     if (method === "append") dom.list.appendChild(div); else dom.list.insertBefore(div, dom.list.children[1] || null);
 
     attachSwipeHandler(div, doc.id, data);
-    div.addEventListener('contextmenu', (e) => { e.preventDefault(); openContextMenu(doc.id, data); });
-    let lp; div.addEventListener('touchstart', () => { lp = setTimeout(() => openContextMenu(doc.id, data), 500); }, {passive:true});
-    div.addEventListener('touchend', () => clearTimeout(lp));
+    
+    // FIX: Robust Long Press that Cancels on Scroll
+    div.addEventListener('contextmenu', (e) => { e.preventDefault(); }); // Disable default context menu
+    let lp, sx=0, sy=0;
+    const clearLp = () => clearTimeout(lp);
+    
+    div.addEventListener('touchstart', (e) => { 
+        sx = e.touches[0].clientX; 
+        sy = e.touches[0].clientY; 
+        lp = setTimeout(() => openContextMenu(doc.id, data), 500); 
+    }, {passive:true});
+    
+    div.addEventListener('touchmove', (e) => { 
+        // If user moves finger more than 10px (scrolls), cancel the menu
+        if(Math.abs(e.touches[0].clientX - sx) > 10 || Math.abs(e.touches[0].clientY - sy) > 10) clearLp(); 
+    }, {passive:true});
+    
+    div.addEventListener('touchend', clearLp);
+    div.addEventListener('touchcancel', clearLp);
 
     const bubble = document.createElement('div'); bubble.className = 'bubble';
     if(data.rep) {
         const rh = document.createElement('div'); rh.className = 'reply-header';
         let txt = decrypt(data.rep.d); if(txt && txt.includes('http') && !txt.includes(' ')) txt = "📷 Media";
         const repUser = resolveUser(data.rep.s); // USE RESOLVED USER
-        rh.innerText = `↪ ${repUser.name}: ${txt ? txt.substring(0,20) : '...'}...`; bubble.appendChild(rh);
+        rh.innerText = `${repUser.name}: ${txt ? txt.substring(0,20) : '...'}...`; bubble.appendChild(rh);
     }
 
     const contentDiv = document.createElement('div'); contentDiv.className = 'msg-content';
+    
+    // STORE RAW CONTENT HASH TO PREVENT UNNECESSARY RE-RENDERS
+    contentDiv.dataset.raw = data.d; 
+    
     const cleanText = data.y === 'unsent' ? null : decrypt(data.d);
     if(data.y === 'unsent') { contentDiv.innerHTML = "<span class='msg-unsent'>🚫 Message Unsent</span>"; }
     else {
@@ -843,7 +906,10 @@ async function processMessageDoc(doc, method) {
     if(data.rx && Object.keys(data.rx).length > 0) {
         rxDiv.classList.add('show');
         div.style.marginBottom = "15px"; 
-        Object.values(data.rx).forEach(e => rxDiv.innerHTML += `<span class="rx-item rx-pop">${e}</span>`);
+        Object.values(data.rx).forEach(e => {
+            // APPLY CUSTOM EMOJI TO REACTION BUBBLE
+            rxDiv.innerHTML += `<span class="rx-item rx-pop">${replaceCustomEmojis(e)}</span>`;
+        });
     }
     bubble.appendChild(rxDiv); div.appendChild(bubble);
 
@@ -868,22 +934,30 @@ function updateMessageInPlace(doc) {
         bubble.classList.remove('big-emoji');
         const media = row.querySelector('img, video, audio, .custom-audio-player, .custom-video-player'); if(media) media.remove();
     } else {
-        const cleanText = decrypt(data.d);
-        if(data.y === 'text' && isOnlyEmoji(cleanText)) bubble.classList.add('big-emoji'); 
-        else bubble.classList.remove('big-emoji');
-        
-        renderContent(content, cleanText, data.y).then(() => {
-             if(data.edited && data.y === 'text') {
-                content.insertAdjacentHTML('beforeend', '<span class="msg-edited">(edited)</span>');
-            }
-        });
+        // CRITICAL FIX: Only re-render if content CHANGED
+        if(content.dataset.raw !== data.d) {
+            content.dataset.raw = data.d;
+            
+            const cleanText = decrypt(data.d);
+            if(data.y === 'text' && isOnlyEmoji(cleanText)) bubble.classList.add('big-emoji'); 
+            else bubble.classList.remove('big-emoji');
+            
+            renderContent(content, cleanText, data.y).then(() => {
+                 if(data.edited && data.y === 'text') {
+                    content.insertAdjacentHTML('beforeend', '<span class="msg-edited">(edited)</span>');
+                }
+            });
+        }
     }
 
     const rxDiv = row.querySelector('.rx-container'); rxDiv.innerHTML = '';
     if(data.rx && Object.keys(data.rx).length > 0) {
         rxDiv.classList.add('show');
         row.style.marginBottom = "15px"; 
-        Object.values(data.rx).forEach(e => rxDiv.innerHTML += `<span class="rx-item rx-pop">${e}</span>`);
+        Object.values(data.rx).forEach(e => {
+            // APPLY CUSTOM EMOJI TO REACTION BUBBLE
+            rxDiv.innerHTML += `<span class="rx-item rx-pop">${replaceCustomEmojis(e)}</span>`;
+        });
         rxDiv.onclick = (e) => { e.stopPropagation(); openRxModal(data.rx); };
     } else { 
         rxDiv.classList.remove('show'); 
@@ -935,10 +1009,11 @@ dom.btnEditConfirm.onclick = async () => {
 };
 
 // --- CUSTOM REACTION FEATURE ---
+// UPDATED: Delegated listener to handle clicks on replaced <img> tags
 dom.rxPicker.addEventListener('click', async (e) => {
-    if(e.target.tagName === 'SPAN' && e.target.id !== 'rx-custom-btn') {
+    const target = e.target.closest('span');
+    if(target && target.closest('.rx-picker') === dom.rxPicker && target.id !== 'rx-custom-btn') {
         vibrate(10); // VIBRATE
-        const target = e.target;
         target.classList.add('selected');
         setTimeout(() => {
             target.classList.remove('selected');
@@ -1009,7 +1084,8 @@ function openRxModal(rx) {
     if(!rx) return; dom.rxList.innerHTML = '';
     Object.entries(rx).forEach(([uid, emoji]) => {
         const u = resolveUser(uid); // USE RESOLVED USER
-        dom.rxList.innerHTML += `<div class="rx-detail-row"><img src="${u.avatar}" style="width:24px;height:24px;border-radius:50%"><span style="flex:1;font-weight:bold">${u.name}</span><span style="font-size:20px">${emoji}</span></div>`;
+        // APPLY CUSTOM EMOJI TO RX MODAL
+        dom.rxList.innerHTML += `<div class="rx-detail-row"><img src="${u.avatar}" style="width:24px;height:24px;border-radius:50%"><span style="flex:1;font-weight:bold">${u.name}</span><span style="font-size:20px">${replaceCustomEmojis(emoji)}</span></div>`;
     });
     dom.rxModal.style.display = 'flex';
 }
@@ -1026,7 +1102,7 @@ async function renderContent(wrapper, content, type) {
             .replace(/'/g, "&#039;");
 
         // --- AUTO-LINKER REGEX ---
-        const linkedText = safeText.replace(
+        let linkedText = safeText.replace(
             /(\b(?:https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})[^\s]*)/g, 
             (url) => {
                 let href = url;
@@ -1036,10 +1112,15 @@ async function renderContent(wrapper, content, type) {
                 return `<a href="${href}" target="_blank">${url}</a>`;
             }
         );
+        
+        // --- APPLY CUSTOM EMOJIS ---
+        linkedText = replaceCustomEmojis(linkedText);
+
         wrapper.innerHTML = linkedText;
 
     } 
     else if (type === 'media') {
+        wrapper.innerHTML = ''; // FIX FOR DOUBLE MEDIA RENDERING
         const skel = document.createElement('div'); skel.className = 'skeleton'; wrapper.appendChild(skel);
         try {
             const res = await fetch(content); const txt = await res.text(); const b64 = decrypt(txt);
@@ -1088,18 +1169,41 @@ function startReply(id, encContent, senderId) {
     dom.replyText.innerText = clean; dom.input.focus();
 }
 dom.btnReplyCancel.onclick = () => { currentReply = null; dom.replyBar.style.display = 'none'; };
+
+// FIX: Enhanced Swipe Handler (Locks Vertical Scrolling)
 function attachSwipeHandler(row, id, data) {
-    let startX = 0;
-    row.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive: true});
-    row.addEventListener('touchmove', e => { const diff = e.touches[0].clientX - startX; if(diff > 0 && diff < 100) row.style.transform = `translateX(${diff}px)`; }, {passive: true});
+    let startX = 0, startY = 0, isScrolling = false;
+    
+    row.addEventListener('touchstart', e => { 
+        startX = e.touches[0].clientX; 
+        startY = e.touches[0].clientY; 
+        isScrolling = false; 
+    }, {passive: true});
+    
+    row.addEventListener('touchmove', e => { 
+        const diffX = e.touches[0].clientX - startX;
+        const diffY = e.touches[0].clientY - startY;
+        
+        // If vertical movement detected early, lock it as vertical scroll
+        if (Math.abs(diffY) > Math.abs(diffX)) {
+            isScrolling = true;
+        }
+
+        // Only animate horizontal swipe if we are NOT scrolling vertically
+        if(!isScrolling && diffX > 0 && diffX < 100) {
+            row.style.transform = `translateX(${diffX}px)`; 
+        }
+    }, {passive: true});
+    
     row.addEventListener('touchend', e => { 
-        if(e.changedTouches[0].clientX - startX > 60) { 
+        if(!isScrolling && e.changedTouches[0].clientX - startX > 60) { 
             vibrate(20); // VIBRATE
             startReply(id, data.d, data.s); 
         } 
         row.style.transform = 'translateX(0)'; 
     });
 }
+
 async function uploadMedia(b64) {
     dom.status.innerText = "Encrypting...";
     try {
