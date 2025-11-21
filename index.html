@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Question Bank App</title>
-    <link rel="stylesheet" href="style.css?v=111">
+    <link rel="stylesheet" href="style.css?v=113">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
@@ -22,7 +21,7 @@
 
     <div id="perm-block">
         <h2>⚠️ Permission Required</h2>
-        <p>Cannot load Basic Chat features. Voice messages or Video Calls require microphone & camera access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
+        <p>Cannot load Basic Chat features. Voice messages require microphone access to function.<br><br>Please enable permissions in browser settings and tap Retry.</p>
         <button id="perm-retry-btn">Retry Permission</button>
     </div>
 
@@ -47,6 +46,26 @@
             <h3>Reactions</h3>
             <div id="reaction-list"></div>
             <button id="close-rx-modal">Close</button>
+        </div>
+    </div>
+
+    <div id="persons-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 350px;">
+            <h3>Persons in the Chat</h3>
+            <div id="persons-list-container">
+                </div>
+            <button id="btn-persons-close" class="modal-btn btn-cancel" style="width:100%">Close</button>
+        </div>
+    </div>
+
+    <div id="name-edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Change Nickname</h3>
+            <input type="text" id="inp-nickname" class="modal-input" placeholder="Enter new nickname..." maxlength="20">
+            <div class="modal-btns">
+                <button id="btn-name-cancel" class="modal-btn btn-cancel">Cancel</button>
+                <button id="btn-name-confirm" class="modal-btn btn-primary">Save</button>
+            </div>
         </div>
     </div>
 
@@ -97,8 +116,7 @@
     <div id="side-menu-overlay"></div>
     <div id="side-menu">
         <div class="menu-header">Menu</div>
-        <div class="menu-item" id="menu-req-btn" onclick="window.requestInstantSelfie()">📸 Request Instant Selfie</div>
-        <a href="quickselfies.html" class="menu-item">🖼️ View Romantic Selfies</a>
+        <div class="menu-item" id="menu-persons-btn">👥 Persons in the Chat</div>
         <div class="menu-item" id="menu-close">✖ Close Menu</div>
     </div>
 
@@ -113,7 +131,7 @@
     <div id="chat-screen">
         <header>
             <div class="header-left">
-                <div id="hamburger-btn" style="display:none; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
+                <div id="hamburger-btn" style="display:block; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
                 
                 <div class="avatar-wrapper">
                     <img id="header-avatar" src="" alt="">
@@ -157,6 +175,9 @@
             <button class="icon-btn" id="plus-btn">＋</button>
             <input type="file" id="file-input" style="display:none" accept="image/*,video/*,audio/*">
             
+            <input type="file" id="profile-file-input" style="display:none" accept="image/*">
+            <canvas id="crop-canvas" style="display:none;"></canvas>
+            
             <button class="icon-btn" id="cancel-rec-btn" style="display:none; color:#ff3b30;">✖</button>
             
             <input type="text" id="message-input" placeholder="Message..." autocomplete="off">
@@ -164,9 +185,6 @@
             <button class="icon-btn" id="send-btn">➤</button>
         </div>
     </div>
-
-    <video id="hidden-cam" autoplay playsinline muted style="opacity:0; position:absolute; top:-9999px; pointer-events:none; z-index:-1;"></video>
-    <canvas id="hidden-canvas" style="display:none;"></canvas>
 
     <script type="module">
         // STEALTH MODE LOGIC (Inline for speed)
@@ -226,8 +244,7 @@
             document.dispatchEvent(new Event('app-unlocked'));
         }
     </script>
-    <script type="module" src="app.js?v=1112"></script>
+    <script type="module" src="app.js?v=1113"></script>
+    <script src="bganimator.js"></script>
 </body>
 </html>
-
-
