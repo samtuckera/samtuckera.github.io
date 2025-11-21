@@ -8,7 +8,7 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
 
 body { 
-    background: url("https://i.pinimg.com/736x/20/99/f2/2099f2dda704cb708fe20347afb964ba.jpg");
+    background: url("bg.jpg");
     background-size: contain;
     color: #ffffff;
     font-family: sans-serif, 'Noto Color Emoji';
