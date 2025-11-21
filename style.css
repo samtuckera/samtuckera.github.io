@@ -8,22 +8,18 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
 
 body { 
-    background-color: #000000; 
-    color: #ffffff; 
-    
-    /* --- FONT STACK FIX --- */
-    /* 1. CustomFont: Your preferred text font */
-    /* 2. System Fonts (-apple-system, Roboto, etc.): For numbers/text if CustomFont fails */
-    /* 3. Noto Color Emoji: Only for actual emojis that the text fonts can't render */
+    background: url("https://i.pinimg.com/736x/20/99/f2/2099f2dda704cb708fe20347afb964ba.jpg");
+    background-size: contain;
+    color: #ffffff;
     font-family: sans-serif, 'Noto Color Emoji';
-    
-    margin: 0; 
-    height: 100dvh; 
-    display: flex; 
-    flex-direction: column; 
-    overflow: hidden; 
-  padding-top:15px;
+    margin: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+transition: 100ms linear;
 }
+
 
 /* --- STEALTH MODE SCREEN (FAKE ERROR) --- */
 #stealth-screen {
@@ -32,16 +28,15 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: #f5f5f7; /* Light educational app theme */
+    background: #f5f5f7; 
     color: #1d1d1f;
-    z-index: 99999; /* Below permissions but above content */
+    z-index: 99999; 
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
     padding: 20px;
-    /* Keep Stealth Screen looking generic/system-like to avoid suspicion */
     font-family: 'Helvetica Neue', sans-serif; 
 }
 .stealth-icon { font-size: 60px; margin-bottom: 20px; color: #ff3b30; }
@@ -49,7 +44,7 @@ body {
 .stealth-desc { font-size: 14px; color: #666; max-width: 300px; line-height: 1.5; }
 .stealth-btn { margin-top: 30px; padding: 10px 20px; border: 1px solid #ccc; border-radius: 20px; color: #666; font-size: 13px; background: transparent; }
 
-/* --- PERMISSION BLOCKER (FULL SCREEN) --- */
+/* --- PERMISSION BLOCKER --- */
 #perm-block {
     display: none; 
     position: fixed;
@@ -79,7 +74,7 @@ body {
     box-shadow: 0 4px 15px rgba(0,122,255,0.4);
 }
 
-/* --- APP LOADER (OVERLAY EVERYTHING) --- */
+/* --- APP LOADER --- */
 #app-loader { 
     position: fixed; 
     top: 0; 
@@ -87,7 +82,7 @@ body {
     width: 100%; 
     height: 100%; 
     background: #000; 
-    z-index: 200000; /* HIGHEST Z-INDEX */
+    z-index: 200000; 
     display: flex; 
     flex-direction: column; 
     align-items: center; 
@@ -105,7 +100,16 @@ body {
 .menu-item { color: white; text-decoration: none; padding: 12px; background: #2c2c2e; border-radius: 8px; font-size: 15px; cursor: pointer; display: block; }
 .menu-item:active { background: #3a3a3c; }
 
-/* --- SEEN TEXT INDICATOR --- */
+/* --- PERSONS MODAL STYLES --- */
+.person-row { display: flex; align-items: center; gap: 15px; background: #2c2c2e; padding: 15px; border-radius: 12px; margin-bottom: 10px; }
+.person-avatar-wrapper { position: relative; width: 50px; height: 50px; cursor: pointer; }
+.person-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #333; }
+.person-edit-icon { position: absolute; bottom: 0; right: 0; background: #007AFF; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 1px solid #fff; }
+.person-info { flex: 1; cursor: pointer; }
+.person-name { font-weight: bold; font-size: 16px; display: block; }
+.person-sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+/* --- SEEN TEXT --- */
 .seen-label {
     font-size: 9px;
     font-weight: bold;
@@ -122,13 +126,13 @@ body {
 /* --- TYPING INDICATOR --- */
 #typing-indicator {
     position: absolute;
-    bottom: 80px; /* Just above input area */
+    bottom: 80px; 
     left: 20px;
     background: #262628;
     padding: 8px 12px;
     border-radius: 18px;
     border-bottom-left-radius: 4px;
-    display: none; /* Hidden by default */
+    display: none; 
     align-items: center;
     gap: 4px;
     z-index: 15;
@@ -148,7 +152,7 @@ body {
     40% { transform: scale(1); }
 }
 
-/* --- MEDIA VIEWER (FIXED) --- */
+/* --- MEDIA VIEWER --- */
 .media-overlay { 
     display: none; 
     position: fixed; 
@@ -157,7 +161,7 @@ body {
     width: 100%; 
     height: 100%; 
     background: #000; 
-    z-index: 50000; /* On top of chat, below perm/stealth/loader */
+    z-index: 50000; 
     flex-direction: column; 
 }
 .media-top-bar { 
@@ -202,7 +206,7 @@ body {
 
 /* --- HEADER --- */
 #chat-screen { display: none; flex-direction: column; height: 100%; position: relative; }
-header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(10px); z-index: 10; }
+header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(10px); z-index: 10;padding-top:30px; }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .avatar-wrapper { position: relative; width: 40px; height: 40px; }
 #header-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 1px solid #333; }
@@ -247,11 +251,9 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .msg-unsent { font-style: italic; opacity: 0.6; font-size: 14px; color: #aaa; }
 .reply-header { font-size: 11px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.1); border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* --- LINK STYLING (Requested) --- */
+/* --- LINK STYLING --- */
 .bubble a { text-decoration: underline; opacity: 0.9; font-weight: bold; word-break: break-all; }
-/* ME (Right side) - Red Links */
 .me .bubble a { color: #ff3b30 !important; } 
-/* PARTNER (Left side) - Blue Links */
 .other .bubble a { color: #007AFF !important; }
 
 /* --- REACTIONS & ANIMATION --- */
@@ -268,7 +270,6 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 
 /* --- CONTEXT MENU ANIMATIONS --- */
 .rx-picker { display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 10px; padding: 0 10px; }
-/* UPDATED: Faster transition for snappy feel */
 .rx-picker span { cursor: pointer; transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: inline-block; }
 .rx-picker span.selected { transform: scale(2.5); }
 #rx-custom-btn { font-weight: bold; color: #007AFF; }
@@ -340,3 +341,8 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .ctx-item.red { color: #ff3b30; background: rgba(255, 59, 48, 0.1); }
 
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+/* --- NOTIFICATIONS --- */
+.msg-row.notify { justify-content: center; margin: 15px 0; pointer-events: none; }
+.notify-bubble { background: rgba(30,30,30,0.6); border: 1px solid #333; color: #888; font-size: 11px; padding: 6px 14px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); pointer-events: auto; }
+.notify-img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #555; object-fit: cover; margin-top: 5px; }
