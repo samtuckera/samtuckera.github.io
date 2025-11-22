@@ -620,6 +620,36 @@ async function handleScroll() {
     if (dist > 300) dom.scrollBtn.classList.add('show'); else { dom.scrollBtn.classList.remove('show'); dom.scrollBtn.classList.remove('pulse'); }
 }
 
+// BUG FIX #1: Helper function to insert message in correct chronological order
+function appendSorted(div, data) {
+    if (dom.list.children.length === 0) { dom.list.appendChild(div); return; }
+    const myTime = data.t ? data.t.toMillis() : Date.now();
+    const children = Array.from(dom.list.children);
+    // Optimization: check last first
+    const lastDiv = children[children.length - 1];
+    if(lastDiv.id.startsWith('msg-')) {
+        const lastId = lastDiv.id.replace('msg-', '');
+        const lastData = msgCache[lastId];
+        if(!lastData || (lastData.t && lastData.t.toMillis() <= myTime)) {
+            dom.list.appendChild(div); return;
+        }
+    } else {
+        dom.list.appendChild(div); return;
+    }
+    
+    // Find spot
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if(!child.id.startsWith('msg-')) continue;
+        const cId = child.id.replace('msg-', '');
+        const cData = msgCache[cId];
+        if (cData && cData.t && cData.t.toMillis() > myTime) {
+            dom.list.insertBefore(div, child); return;
+        }
+    }
+    dom.list.appendChild(div);
+}
+
 async function processMessageDoc(doc, method) {
     if (document.getElementById(`msg-${doc.id}`)) return;
     const data = doc.data(); msgCache[doc.id] = data; 
@@ -698,14 +728,14 @@ async function processMessageDoc(doc, method) {
 
         } catch(e) { bubble.innerText = "System Notification"; }
         div.appendChild(bubble);
-        if (method === "append") dom.list.appendChild(div); else dom.list.insertBefore(div, dom.list.children[1] || null);
+        if (method === "append") appendSorted(div, data); else dom.list.insertBefore(div, dom.list.children[1] || null);
         return; 
     }
 
     const div = document.createElement('div'); div.id = `msg-${doc.id}`; div.className = `msg-row ${data.s === currentUser ? 'me' : 'other'}`;
     const senderInfo = resolveUser(data.s);
     if(data.s !== currentUser) { const img = document.createElement('img'); img.src = senderInfo.avatar; img.className = 'msg-avatar'; div.appendChild(img); }
-    if (method === "append") dom.list.appendChild(div); else dom.list.insertBefore(div, dom.list.children[1] || null);
+    if (method === "append") appendSorted(div, data); else dom.list.insertBefore(div, dom.list.children[1] || null);
 
     attachSwipeHandler(div, doc.id, data);
     
@@ -907,9 +937,13 @@ function startReply(id, encContent, senderId) {
 }
 dom.btnReplyCancel.onclick = () => { currentReply = null; dom.replyBar.style.display = 'none'; };
 
+// BUG FIX #2: Check for lock state
 function attachSwipeHandler(row, id, data) {
     let startX = 0, startY = 0, isScrolling = false;
-    row.addEventListener('touchstart', e => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isScrolling = false; }, {passive: true});
+    row.addEventListener('touchstart', e => { 
+        if(dom.lockOverlay.style.display === 'flex') return; // FIX
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY; isScrolling = false; 
+    }, {passive: true});
     row.addEventListener('touchmove', e => { 
         const diffX = e.touches[0].clientX - startX; const diffY = e.touches[0].clientY - startY;
         if (Math.abs(diffY) > Math.abs(diffX)) { isScrolling = true; }
@@ -1051,54 +1085,75 @@ function checkAndSnapTime() {
     
     if(!hEl || !mEl || !apEl) return;
     
-    let h = parseInt(hEl.innerText);
+    let rawH = parseInt(hEl.innerText);
     const m = parseInt(mEl.innerText);
-    const isPm = apEl.innerText === 'PM';
+    const currentIsPm = apEl.innerText === 'PM';
     
-    if(isPm && h !== 12) h += 12;
-    if(!isPm && h === 12) h = 0;
+    // Helper to calculate diff
+    const getDiff = (h, m, isPm) => {
+        let hour = h;
+        if(isPm && hour !== 12) hour += 12;
+        if(!isPm && hour === 12) hour = 0;
+        
+        let target = new Date();
+        target.setHours(hour, m, 0, 0);
+        
+        // If target is in past, assume tomorrow
+        if(target.getTime() < Date.now()) {
+            target.setDate(target.getDate() + 1);
+        }
+        return target.getTime() - Date.now();
+    };
     
-    let targetDate = new Date();
-    targetDate.setHours(h, m, 0, 0);
-    
-    // If target is in past, assume tomorrow
-    if(targetDate.getTime() < Date.now()) {
-        targetDate.setDate(targetDate.getDate() + 1);
-    }
-    
-    const diff = targetDate.getTime() - Date.now();
     const maxDiff = 6 * 60 * 60 * 1000; // 6 hours
+    const diff = getDiff(rawH, m, currentIsPm);
     
     if(diff > maxDiff) {
-        // SNAP BACK TO CURRENT TIME
-        const now = new Date();
-        let curH = now.getHours();
-        const curM = now.getMinutes();
-        const curIsPm = curH >= 12;
+        // Current selection is invalid. Check if flipping AM/PM makes it valid.
+        const otherIsPm = !currentIsPm;
+        const otherDiff = getDiff(rawH, m, otherIsPm);
         
-        if(curH > 12) curH -= 12;
-        if(curH === 0) curH = 12;
-        
-        // Trigger Animation Classes
-        [dom.pickerHour, dom.pickerMin, dom.pickerAmpm].forEach(col => {
-            col.parentElement.classList.add('picker-red-flash');
-        });
-        dom.lockLimitText.classList.add('text-scale-pop');
-        
-        // Remove Animation Classes after animation ends
-        setTimeout(() => {
+        if (otherDiff <= maxDiff) {
+            // Flip to the other AM/PM
+             // Animate just the AM/PM column to indicate auto-correction
+            dom.pickerAmpm.parentElement.classList.add('picker-red-flash');
+            
+            setTimeout(() => {
+                dom.pickerAmpm.parentElement.classList.remove('picker-red-flash');
+            }, 200);
+            
+            scrollToValue(dom.pickerAmpm, otherIsPm ? "PM" : "AM");
+        } else {
+            // Neither is valid, snap back to current time
+            const now = new Date();
+            let curH = now.getHours();
+            const curM = now.getMinutes();
+            const curIsPm = curH >= 12;
+            
+            if(curH > 12) curH -= 12;
+            if(curH === 0) curH = 12;
+            
+            // Trigger Animation Classes
             [dom.pickerHour, dom.pickerMin, dom.pickerAmpm].forEach(col => {
-                col.parentElement.classList.remove('picker-red-flash');
+                col.parentElement.classList.add('picker-red-flash');
             });
-            dom.lockLimitText.classList.remove('text-scale-pop');
-        }, 200); // Animation duration
-        
-        // Snap back animation
-        setTimeout(() => {
-            scrollToValue(dom.pickerHour, curH);
-            scrollToValue(dom.pickerMin, curM);
-            scrollToValue(dom.pickerAmpm, curIsPm ? "PM" : "AM");
-        }, 200); 
+            dom.lockLimitText.classList.add('text-scale-pop');
+            
+            // Remove Animation Classes after animation ends
+            setTimeout(() => {
+                [dom.pickerHour, dom.pickerMin, dom.pickerAmpm].forEach(col => {
+                    col.parentElement.classList.remove('picker-red-flash');
+                });
+                dom.lockLimitText.classList.remove('text-scale-pop');
+            }, 200); // Animation duration
+            
+            // Snap back animation
+            setTimeout(() => {
+                scrollToValue(dom.pickerHour, curH);
+                scrollToValue(dom.pickerMin, curM);
+                scrollToValue(dom.pickerAmpm, curIsPm ? "PM" : "AM");
+            }, 200); 
+        }
     }
 }
 
