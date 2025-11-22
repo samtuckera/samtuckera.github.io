@@ -6,6 +6,7 @@
     <title>Media Gallery</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
+        /* ... existing styles ... */
         body {
             margin: 0;
             background: #000;
@@ -46,7 +47,6 @@
             letter-spacing: 2px;
             flex: 1;
             text-align: center;
-            /* Offset to center title correctly despite back btn */
             margin-right: 34px; 
         }
 
@@ -251,7 +251,7 @@
 
     <div id="gallery-header">
         <button id="btn-back">←</button>
-        <h2>Media Gallery</h2>
+        <h2>Shared Media Gallery</h2>
     </div>
     
     <div id="status-bar"></div>
@@ -271,7 +271,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        // ADDED: 'where' import
+        import { getFirestore, collection, getDocs, query, orderBy, limit, startAfter, where } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 
         // --- CONFIG ---
@@ -309,7 +310,9 @@
         // PAGINATION SETTINGS
         let targetMediaCount = 10; 
         const NEXT_BATCH_INCREMENT = 15; 
-        const SCAN_CHUNK_SIZE = 50; 
+        // REDUCED CHUNK SIZE: Since we are filtering by 'media' only, 
+        // every doc returned is a hit. No need for 50.
+        const SCAN_CHUNK_SIZE = 20; 
         const LOCAL_CACHE_LIMIT = 50; 
 
         // --- INDEXED DB HELPERS ---
@@ -358,7 +361,6 @@
         }
 
         async function init() {
-            // AUTH CHECK: REDIRECT IF NOT LOGGED IN
             if (!vaultKey || !currentUser) {
                 window.location.href = 'index.html';
                 return;
@@ -366,7 +368,6 @@
 
             await loadLocalCache();
             
-            // Hide Initial Loader once cache is rendered
             initialLoader.style.opacity = '0';
             setTimeout(() => { initialLoader.style.display = 'none'; }, 500);
 
@@ -388,12 +389,9 @@
             if (isFetching) return;
             isFetching = true;
             
-            // UI UPDATES
             if (!lastVisibleDoc) {
-                // Initial Background Scan
                 status.innerHTML = `<span class="status-text-blue">Updating</span> <div class="spinner-small spinner-blue"></div>`;
             } else {
-                // Load More Click
                 loadMoreBtn.disabled = true;
                 loadMoreBtn.innerHTML = `Loading more <div class="spinner-small"></div>`;
             }
@@ -411,10 +409,22 @@
             try {
                 while (mediaFoundInBatch < targetMediaCount) {
                     let q;
+                    // OPTIMIZED QUERY: Using 'where' to skip non-media documents
                     if (lastVisibleDoc) {
-                        q = query(collection(db, "messages"), orderBy("t", "desc"), startAfter(lastVisibleDoc), limit(SCAN_CHUNK_SIZE));
+                        q = query(
+                            collection(db, "messages"), 
+                            where("y", "==", "media"), 
+                            orderBy("t", "desc"), 
+                            startAfter(lastVisibleDoc), 
+                            limit(SCAN_CHUNK_SIZE)
+                        );
                     } else {
-                        q = query(collection(db, "messages"), orderBy("t", "desc"), limit(SCAN_CHUNK_SIZE));
+                        q = query(
+                            collection(db, "messages"), 
+                            where("y", "==", "media"), 
+                            orderBy("t", "desc"), 
+                            limit(SCAN_CHUNK_SIZE)
+                        );
                     }
 
                     const snapshot = await getDocs(q);
@@ -428,6 +438,7 @@
 
                     for (const doc of snapshot.docs) {
                         const data = doc.data();
+                        // Redundant check for 'y' but good for safety
                         if (data.y === 'media' && data.d) {
                             if (knownMediaIds.has(doc.id)) continue; 
 
@@ -447,7 +458,7 @@
 
                 targetMediaCount = NEXT_BATCH_INCREMENT; 
                 
-                status.innerText = "Up to date"; // Reset status bar
+                status.innerText = "Up to date"; 
                 
                 if (hitEndOfHistory) {
                     loadMoreBtn.style.display = 'none';
@@ -459,7 +470,12 @@
 
             } catch (e) {
                 console.error(e);
-                status.innerText = "Connection Error";
+                if (e.message.includes('index')) {
+                    status.innerText = "Missing Index: Check Console";
+                    console.warn("You need a composite index: Collection 'messages', Fields: 'y' Ascending, 't' Descending.");
+                } else {
+                    status.innerText = "Connection Error";
+                }
                 loadMoreBtn.innerText = "Retry";
                 loadMoreBtn.disabled = false;
             } finally {
@@ -497,7 +513,6 @@
             card.dataset.ts = timestamp || 0;
             card.dataset.id = id;
             
-            // --- AUDIO RENDERER ---
             if (b64.startsWith('data:audio')) {
                 card.className = 'media-card audio-card';
                 
@@ -517,13 +532,10 @@
                 
                 const audio = new Audio(b64);
                 
-                // Audio Logic
                 playBtn.onclick = () => {
-                    // Pause all others
                     document.querySelectorAll('audio').forEach(a => {
                         if(a !== audio) {
                             a.pause();
-                            // Reset other buttons (brittle but works for basic)
                             const otherCard = a.parentElement;
                             if(otherCard) {
                                 const btn = otherCard.querySelector('.audio-play-btn');
@@ -568,11 +580,9 @@
                 card.appendChild(playBtn);
                 card.appendChild(progressBar);
                 card.appendChild(timeLabel);
-                // Append hidden audio to keep reference
                 audio.style.display = 'none';
                 card.appendChild(audio);
             } 
-            // --- VIDEO RENDERER ---
             else if (b64.startsWith('data:video')) {
                 card.className = 'media-card';
                 const vid = document.createElement('video');
@@ -586,7 +596,6 @@
                 card.appendChild(badge);
                 card.onclick = () => expandMedia(b64, 'video');
             }
-            // --- IMAGE RENDERER ---
             else if (b64.startsWith('data:image')) {
                 card.className = 'media-card';
                 const img = document.createElement('img');
@@ -597,7 +606,6 @@
                 card.onclick = () => expandMedia(b64, 'image');
             }
 
-            // INSERTION SORT: Newest (Highest TS) at TOP
             const children = Array.from(gallery.children);
             let inserted = false;
 
@@ -647,7 +655,6 @@
 
         loadMoreBtn.onclick = loadNextBatch;
 
-        // Init
         init();
 
     </script>
