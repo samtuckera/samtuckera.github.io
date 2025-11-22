@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Media Gallery</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+        }
+
+        /* --- HEADER WITH BACK BUTTON --- */
+        #gallery-header {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0,0,0,0.9);
+            border-bottom: 1px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        #btn-back {
+    background: #3f3f3f;
+    color: #ffffff;
+    font-size: 25px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-radius: 11px;}
+
+        h2 {
+            margin: 0;
+            font-size: 16px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            flex: 1;
+            text-align: center;
+            /* Offset to center title correctly despite back btn */
+            margin-right: 34px; 
+        }
+
+        /* --- SPINNERS --- */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .spinner-small {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+
+        .spinner-blue {
+            border-color: rgba(0,122,255,0.3);
+            border-top-color: #007AFF;
+        }
+
+        /* --- INITIAL LOADER OVERLAY --- */
+        #initial-loader {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .big-spinner {
+            width: 40px; height: 40px;
+            border: 4px solid rgba(0,122,255,0.3);
+            border-top: 4px solid #007AFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        .loading-text {
+            color: #888;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        /* --- GRID CONTAINER --- */
+        #gallery-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            grid-auto-rows: 110px; 
+            gap: 8px;
+            align-content: start;
+            grid-auto-flow: dense; 
+        }
+
+        /* --- VISUAL CARDS (Photo/Video) --- */
+        .media-card {
+            position: relative;
+            background: #222;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .media-card:active { transform: scale(0.98); }
+        
+        .media-thumb {
+            width: 100%; height: 100%;
+            object-fit: cover; display: block;
+        }
+        .video-badge {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+
+        /* --- CUSTOM AUDIO PLAYER STYLE --- */
+        .media-card.audio-card {
+            grid-column: 1 / -1; 
+            height: auto; min-height: 60px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            cursor: default;
+            margin: 5px 0;
+            gap: 12px;
+        }
+        
+        .audio-play-btn {
+            width: 36px; height: 36px;
+            background: #007AFF;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        .audio-progress-bar {
+            flex: 1;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .audio-progress-fill {
+            height: 100%;
+            background: #007AFF;
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+        
+        .audio-time {
+            font-size: 11px;
+            color: #888;
+            font-family: monospace;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* --- LOAD MORE BTN --- */
+        #load-more-container {
+            padding: 20px;
+            text-align: center;
+            grid-column: 1 / -1;
+        }
+        #btn-load-more {
+            background: #222;
+            border: 1px solid #333;
+            color: #007AFF;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none; 
+            transition: background 0.2s;
+        }
+        #btn-load-more:active { background: #333; }
+        #btn-load-more:disabled { opacity: 0.7; cursor: wait; }
+
+        /* --- MODAL --- */
+        #modal-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 3000;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        #modal-content {
+            max-width: 100%; max-height: 90%;
+            object-fit: contain;
+        }
+        .modal-close {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            width: 40px; height: 40px; border-radius: 50%;
+            font-size: 20px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 3001;
+        }
+        #status-bar {
+            text-align: center;
+            color: #888;
+            padding: 8px;
+            font-size: 11px;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .status-text-blue { color: #007AFF; }
+    </style>
+</head>
+<body>
+
+    <!-- INITIAL LOADING OVERLAY -->
+    <div id="initial-loader">
+        <div class="big-spinner"></div>
+        <div class="loading-text">Loading Media...</div>
+    </div>
+
+    <div id="gallery-header">
+        <button id="btn-back">←</button>
+        <h2>Media Gallery</h2>
+    </div>
+    
+    <div id="status-bar"></div>
+
+    <div id="gallery-container">
+        <!-- Items injected here -->
+        <div id="load-more-container">
+            <button id="btn-load-more">Load More</button>
+        </div>
+    </div>
+
+    <!-- EXPANDED VIEW -->
+    <div id="modal-overlay">
+        <button class="modal-close" id="btn-close">✖</button>
+        <div id="modal-inner-container" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+
+        // --- CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuIDz0QP1Gpb6_40fz7xBY9xihPBuv3OE",
+            authDomain: "sas-chat-61205.firebaseapp.com",
+            projectId: "sas-chat-61205",
+            storageBucket: "sas-chat-61205.firebasestorage.app",
+            messagingSenderId: "775011152776",
+            appId: "1:775011152776:web:e2bec0fe7e1fea99c5003d",
+            measurementId: "G-RYT5P9WDM2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- STATE ---
+        const vaultKey = localStorage.getItem("secure_vault");
+        const currentUser = localStorage.getItem("secure_user");
+        const gallery = document.getElementById('gallery-container');
+        const loadMoreBtn = document.getElementById('btn-load-more');
+        const loadMoreContainer = document.getElementById('load-more-container');
+        const status = document.getElementById('status-bar');
+        const modal = document.getElementById('modal-overlay');
+        const modalInner = document.getElementById('modal-inner-container');
+        const btnClose = document.getElementById('btn-close');
+        const initialLoader = document.getElementById('initial-loader');
+        const btnBack = document.getElementById('btn-back');
+
+        let lastVisibleDoc = null;
+        let isFetching = false;
+        let knownMediaIds = new Set(); 
+        
+        // PAGINATION SETTINGS
+        let targetMediaCount = 10; 
+        const NEXT_BATCH_INCREMENT = 15; 
+        const SCAN_CHUNK_SIZE = 50; 
+        const LOCAL_CACHE_LIMIT = 50; 
+
+        // --- INDEXED DB HELPERS ---
+        const DB_NAME = 'ChatMediaDB';
+        const DB_VERSION = 2; 
+        const STORE_NAME = 'media_files';
+        
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (db.objectStoreNames.contains(STORE_NAME)) {
+                        db.deleteObjectStore(STORE_NAME);
+                    }
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id' }); 
+                };
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e);
+            });
+        }
+
+        async function saveToCache(id, b64, timestamp) {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put({ id, b64, t: timestamp });
+        }
+
+        async function getAllLocalMedia() {
+            const db = await openDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).getAll();
+                req.onsuccess = () => {
+                    const res = req.result;
+                    res.sort((a, b) => (b.t || 0) - (a.t || 0));
+                    resolve(res);
+                };
+                req.onerror = () => resolve([]);
+            });
+        }
+
+        // --- CORE LOGIC ---
+        function decrypt(cipherText) {
+            try { return CryptoJS.AES.decrypt(cipherText, vaultKey).toString(CryptoJS.enc.Utf8); } catch (e) { return null; }
+        }
+
+        async function init() {
+            // AUTH CHECK: REDIRECT IF NOT LOGGED IN
+            if (!vaultKey || !currentUser) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            await loadLocalCache();
+            
+            // Hide Initial Loader once cache is rendered
+            initialLoader.style.opacity = '0';
+            setTimeout(() => { initialLoader.style.display = 'none'; }, 500);
+
+            loadNextBatch();
+        }
+
+        async function loadLocalCache() {
+            const cachedItems = await getAllLocalMedia();
+            let count = 0;
+            for (const item of cachedItems) {
+                if (count >= LOCAL_CACHE_LIMIT) break;
+                renderItem(item.b64, item.t, item.id);
+                knownMediaIds.add(item.id); 
+                count++;
+            }
+        }
+
+        async function loadNextBatch() {
+            if (isFetching) return;
+            isFetching = true;
+            
+            // UI UPDATES
+            if (!lastVisibleDoc) {
+                // Initial Background Scan
+                status.innerHTML = `<span class="status-text-blue">Updating</span> <div class="spinner-small spinner-blue"></div>`;
+            } else {
+                // Load More Click
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.innerHTML = `Loading more <div class="spinner-small"></div>`;
+            }
+
+            if (!navigator.onLine) {
+                status.innerText = "Offline Mode";
+                loadMoreBtn.style.display = 'none';
+                isFetching = false;
+                return;
+            }
+
+            let mediaFoundInBatch = 0;
+            let hitEndOfHistory = false;
+
+            try {
+                while (mediaFoundInBatch < targetMediaCount) {
+                    let q;
+                    if (lastVisibleDoc) {
+                        q = query(collection(db, "messages"), orderBy("t", "desc"), startAfter(lastVisibleDoc), limit(SCAN_CHUNK_SIZE));
+                    } else {
+                        q = query(collection(db, "messages"), orderBy("t", "desc"), limit(SCAN_CHUNK_SIZE));
+                    }
+
+                    const snapshot = await getDocs(q);
+                    
+                    if (snapshot.empty) {
+                        hitEndOfHistory = true;
+                        break;
+                    }
+
+                    lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
+
+                    for (const doc of snapshot.docs) {
+                        const data = doc.data();
+                        if (data.y === 'media' && data.d) {
+                            if (knownMediaIds.has(doc.id)) continue; 
+
+                            const success = await processNewOnlineMedia(doc.id, data.d, data.t);
+                            if (success) {
+                                mediaFoundInBatch++;
+                                knownMediaIds.add(doc.id);
+                            }
+                        }
+                    }
+                    
+                    if (snapshot.size < SCAN_CHUNK_SIZE) {
+                        hitEndOfHistory = true;
+                        break;
+                    }
+                }
+
+                targetMediaCount = NEXT_BATCH_INCREMENT; 
+                
+                status.innerText = "Up to date"; // Reset status bar
+                
+                if (hitEndOfHistory) {
+                    loadMoreBtn.style.display = 'none';
+                } else {
+                    loadMoreBtn.style.display = 'inline-block';
+                    loadMoreBtn.disabled = false;
+                    loadMoreBtn.innerHTML = "Load More";
+                }
+
+            } catch (e) {
+                console.error(e);
+                status.innerText = "Connection Error";
+                loadMoreBtn.innerText = "Retry";
+                loadMoreBtn.disabled = false;
+            } finally {
+                isFetching = false;
+            }
+        }
+
+        async function processNewOnlineMedia(id, encryptedData, timestampObj) {
+            try {
+                const decryptedUrl = decrypt(encryptedData);
+                if (!decryptedUrl || !decryptedUrl.startsWith('http')) return false;
+
+                const res = await fetch(decryptedUrl);
+                if (!res.ok) return false;
+                
+                const encryptedBlob = await res.text();
+                const b64 = decrypt(encryptedBlob);
+                
+                if (b64) {
+                    const ts = timestampObj ? timestampObj.toMillis() : Date.now();
+                    await saveToCache(id, b64, ts);
+                    renderItem(b64, ts, id);
+                    return true;
+                }
+            } catch (e) {
+                console.warn("Failed to process media", id);
+            }
+            return false;
+        }
+
+        function renderItem(b64, timestamp, id) {
+            if (!b64) return;
+
+            const card = document.createElement('div');
+            card.dataset.ts = timestamp || 0;
+            card.dataset.id = id;
+            
+            // --- AUDIO RENDERER ---
+            if (b64.startsWith('data:audio')) {
+                card.className = 'media-card audio-card';
+                
+                const playBtn = document.createElement('div');
+                playBtn.className = 'audio-play-btn';
+                playBtn.innerText = '▶';
+                
+                const progressBar = document.createElement('div');
+                progressBar.className = 'audio-progress-bar';
+                const fill = document.createElement('div');
+                fill.className = 'audio-progress-fill';
+                progressBar.appendChild(fill);
+                
+                const timeLabel = document.createElement('div');
+                timeLabel.className = 'audio-time';
+                timeLabel.innerText = "0:00 / 0:00";
+                
+                const audio = new Audio(b64);
+                
+                // Audio Logic
+                playBtn.onclick = () => {
+                    // Pause all others
+                    document.querySelectorAll('audio').forEach(a => {
+                        if(a !== audio) {
+                            a.pause();
+                            // Reset other buttons (brittle but works for basic)
+                            const otherCard = a.parentElement;
+                            if(otherCard) {
+                                const btn = otherCard.querySelector('.audio-play-btn');
+                                if(btn) btn.innerText = '▶';
+                            }
+                        }
+                    });
+
+                    if(audio.paused) {
+                        audio.play();
+                        playBtn.innerText = '⏸';
+                    } else {
+                        audio.pause();
+                        playBtn.innerText = '▶';
+                    }
+                };
+                
+                audio.ontimeupdate = () => {
+                    if(!isFinite(audio.duration)) return;
+                    const pct = (audio.currentTime / audio.duration) * 100;
+                    fill.style.width = pct + '%';
+                    
+                    const curM = Math.floor(audio.currentTime / 60);
+                    const curS = Math.floor(audio.currentTime % 60).toString().padStart(2,'0');
+                    const durM = Math.floor(audio.duration / 60);
+                    const durS = Math.floor(audio.duration % 60).toString().padStart(2,'0');
+                    timeLabel.innerText = `${curM}:${curS} / ${durM}:${durS}`;
+                };
+                
+                audio.onended = () => {
+                    playBtn.innerText = '▶';
+                    fill.style.width = '0%';
+                };
+                
+                progressBar.onclick = (e) => {
+                    if(!isFinite(audio.duration)) return;
+                    const rect = progressBar.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    audio.currentTime = pos * audio.duration;
+                };
+
+                card.appendChild(playBtn);
+                card.appendChild(progressBar);
+                card.appendChild(timeLabel);
+                // Append hidden audio to keep reference
+                audio.style.display = 'none';
+                card.appendChild(audio);
+            } 
+            // --- VIDEO RENDERER ---
+            else if (b64.startsWith('data:video')) {
+                card.className = 'media-card';
+                const vid = document.createElement('video');
+                vid.src = b64;
+                vid.className = 'media-thumb';
+                vid.muted = true;
+                const badge = document.createElement('div');
+                badge.className = 'video-badge';
+                badge.innerText = '▶️';
+                card.appendChild(vid);
+                card.appendChild(badge);
+                card.onclick = () => expandMedia(b64, 'video');
+            }
+            // --- IMAGE RENDERER ---
+            else if (b64.startsWith('data:image')) {
+                card.className = 'media-card';
+                const img = document.createElement('img');
+                img.src = b64;
+                img.className = 'media-thumb';
+                img.loading = "lazy";
+                card.appendChild(img);
+                card.onclick = () => expandMedia(b64, 'image');
+            }
+
+            // INSERTION SORT: Newest (Highest TS) at TOP
+            const children = Array.from(gallery.children);
+            let inserted = false;
+
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i];
+                if (child.id === 'load-more-container') continue;
+
+                const childTs = parseInt(child.dataset.ts || 0);
+                if (timestamp > childTs) {
+                    gallery.insertBefore(card, child);
+                    inserted = true;
+                    break;
+                }
+            }
+
+            if (!inserted) {
+                gallery.insertBefore(card, loadMoreContainer);
+            }
+        }
+
+        function expandMedia(src, type) {
+            modalInner.innerHTML = '';
+            if (type === 'image') {
+                const img = document.createElement('img');
+                img.src = src;
+                img.id = 'modal-content';
+                modalInner.appendChild(img);
+            } else if (type === 'video') {
+                const vid = document.createElement('video');
+                vid.src = src;
+                vid.id = 'modal-content';
+                vid.controls = true;
+                vid.autoplay = true;
+                modalInner.appendChild(vid);
+            }
+            modal.style.display = 'flex';
+        }
+
+        btnClose.onclick = () => {
+            modal.style.display = 'none';
+            modalInner.innerHTML = '';
+        };
+
+        btnBack.onclick = () => {
+            window.location.href = 'index.html';
+        };
+
+        loadMoreBtn.onclick = loadNextBatch;
+
+        // Init
+        init();
+
+    </script>
+</body>
+</html>
