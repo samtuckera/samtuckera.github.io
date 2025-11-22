@@ -138,6 +138,7 @@ const dom = {
 
     // Persons & Profile
     menuPersonsBtn: document.getElementById('menu-persons-btn'),
+    menuExploreBtn: document.getElementById('menu-explore-btn'),
     personsModal: document.getElementById('persons-modal'),
     personsListContainer: document.getElementById('persons-list-container'),
     btnPersonsClose: document.getElementById('btn-persons-close'),
@@ -221,10 +222,12 @@ dom.hamburger.onclick = () => {
     dom.sideMenu.classList.add('open');
     dom.sideOverlay.style.display = 'block';
 };
+
 const closeMenu = () => {
     dom.sideMenu.classList.remove('open');
     dom.sideOverlay.style.display = 'none';
 };
+
 dom.menuClose.onclick = closeMenu;
 dom.sideOverlay.onclick = closeMenu;
 
@@ -234,6 +237,14 @@ dom.menuPersonsBtn.onclick = () => {
     renderPersonsList();
     dom.personsModal.style.display = 'flex';
 };
+
+// --- EXPLORE / GALLERY LOGIC ---
+// Added this section based on your request
+if (dom.menuExploreBtn) {
+    dom.menuExploreBtn.onclick = () => {
+        window.location.href = 'gallery.html';
+    };
+}
 dom.btnPersonsClose.onclick = () => dom.personsModal.style.display = 'none';
 
 let userToEdit = null;
@@ -496,7 +507,6 @@ async function loadCustomEmojis() {
         const res = await fetch('customemojilist.json');
         if (res.ok) {
             customEmojiMap = await res.json();
-            console.log("Custom Emojis Loaded:", customEmojiMap);
             updateContextMenuEmojis(); // <--- Apply to context menu
         }
     } catch (e) {
