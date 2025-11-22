@@ -152,6 +152,44 @@ transition: 100ms linear;
     40% { transform: scale(1); }
 }
 
+/* --- PROFILE VIEWER (Professional) --- */
+.profile-view-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    background: #000;
+}
+#pv-avatar {
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    margin: auto 0;
+}
+.pv-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    padding: 30px 20px 50px 20px;
+    text-align: center;
+}
+#pv-name {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0 0 8px 0;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+#pv-status {
+    font-size: 14px;
+    color: #ccc;
+    margin: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
 /* --- MEDIA VIEWER --- */
 .media-overlay { 
     display: none; 
@@ -365,3 +403,115 @@ header { background: rgba(15,15,15,0.95); padding: 10px 15px; border-bottom: 1px
 .msg-row.notify { justify-content: center; margin: 15px 0; pointer-events: none; }
 .notify-bubble { background: rgba(30,30,30,0.6); border: 1px solid #333; color: #888; font-size: 11px; padding: 6px 14px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); pointer-events: auto; }
 .notify-img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #555; object-fit: cover; margin-top: 5px; }
+.notify-ultimatum {    font-size: 20px;
+    font-weight: bold;
+    margin-top: 5px;
+    color: #ffffff;
+    text-align: center; }
+.notify-timer {    font-size: 24px;
+    font-family: monospace;
+    font-weight: bold;
+    color: #ff9892;
+    margin: 0px 0;
+    text-shadow: 0 0 5px rgba(255,59,48,0.3);}
+
+/* --- TIME PICKER --- */
+.time-picker-container {
+    background: #1c1c1e;
+    border-radius: 12px;
+    padding: 10px;
+    border: 1px solid #333;
+}
+.picker-label {
+    text-align: center;
+    color: #888;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+.picker-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 120px;
+    gap: 10px;
+    position: relative;
+}
+/* Selection highlight bar */
+.picker-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: rgba(255,255,255,0.05);
+    transform: translateY(-50%);
+    border-radius: 8px;
+    pointer-events: none;
+}
+.picker-col {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-behavior: smooth;
+    width: 50px;
+    scrollbar-width: none; /* Firefox */
+    scroll-snap-type: y mandatory; /* SNAP EFFECT */
+    padding: 45px 0; /* CENTERS FIRST & LAST ITEMS */
+}
+.picker-col::-webkit-scrollbar { display: none; }
+.picker-item {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    scroll-snap-align: center; /* SNAP ITEM */
+}
+.picker-item.selected {
+    color: #fff;
+    font-weight: bold;
+    transform: scale(1.2);
+}
+.picker-sep { font-size: 20px; font-weight: bold; padding-bottom: 4px; }
+
+/* --- LOCK OVERLAY --- */
+#lock-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.9); /* Increased opacity for blocking */
+    backdrop-filter: blur(8px);
+    z-index: 150; /* HIGHER THAN CONTEXT MENU */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+}
+#lock-reason-display {
+    font-size: 16px;
+    color: #aaa;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* --- ANIMATIONS --- */
+.text-scale-pop {
+    animation: snapScale 1s ease-in-out;
+    color: #ff3b30 !important;
+}
+@keyframes snapScale {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.picker-red-flash .picker-item.selected {
+    animation: flashRed 1s ease-in-out;
+}
+@keyframes flashRed {
+    0%, 100% { color: #fff; }
+    50% { color: #ff3b30; }
+}
