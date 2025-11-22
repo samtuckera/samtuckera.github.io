@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Question Bank App</title>
-    <link rel="stylesheet" href="style.css?v=116">
+    <link rel="stylesheet" href="style.css?v=125">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
@@ -29,6 +29,18 @@
     <div id="app-loader">
         <div class="spinner"></div>
         <div class="loading-text">Secured Chat Loading</div>
+    </div>
+
+    <!-- NEW: Profile Viewer Modal -->
+    <div id="profile-viewer" class="modal-overlay" style="z-index: 60000;">
+        <div class="profile-view-content">
+            <img id="pv-avatar" src="" alt="Profile">
+            <div class="pv-info">
+                <h2 id="pv-name">Name</h2>
+                <p id="pv-status">Last seen...</p>
+            </div>
+            <button id="pv-close-btn" class="icon-btn" style="position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.5); color:white;">✖</button>
+        </div>
     </div>
 
     <div id="media-viewer" class="media-overlay">
@@ -66,6 +78,38 @@
                 <button id="btn-name-cancel" class="modal-btn btn-cancel">Cancel</button>
                 <button id="btn-name-confirm" class="modal-btn btn-primary">Save</button>
             </div>
+        </div>
+    </div>
+    
+    <!-- CHAT LOCK MODAL -->
+    <div id="lock-setup-modal" class="modal-overlay">
+        <div class="modal-content" style="background: #111;">
+            <h3>🔒 Lock Chat</h3>
+            <div class="time-picker-container">
+                <div class="picker-label">Unlock Time</div>
+                <div class="picker-wrapper">
+                    <div class="picker-col" id="picker-hour"></div>
+                    <div class="picker-sep">:</div>
+                    <div class="picker-col" id="picker-min"></div>
+                    <div class="picker-col" id="picker-ampm"></div>
+                </div>
+            </div>
+            <input type="text" id="inp-lock-reason" class="modal-input" placeholder="Reason (e.g. Sleep)" maxlength="50" style="margin-top:15px;margin-bottom:5px;">
+            <input type="text" id="inp-lock-ultimatum" class="modal-input" placeholder="Ultimatum / Warning" maxlength="50">
+            <div class="modal-btns">
+                <button id="btn-lock-cancel" class="modal-btn btn-cancel">Cancel</button>
+                <button id="btn-lock-confirm" class="modal-btn btn-primary" style="background: #ff3b30;">Lock</button>
+            </div>
+            <div id="lock-limit-text" style="font-size:10px; color:#666; margin-top:10px; transition: transform 0.1s;">Max 6 hours allowed</div>
+        </div>
+    </div>
+
+    <!-- CUSTOM ALERT POPUP -->
+    <div id="alert-modal" class="modal-overlay" style="z-index: 70000;">
+        <div class="modal-content">
+            <h3 id="alert-title">Alert</h3>
+            <p id="alert-msg" style="color: #ccc; font-size: 14px; margin-bottom: 20px;"></p>
+            <button id="btn-alert-ok" class="modal-btn btn-primary" style="width: 100%;">OK</button>
         </div>
     </div>
 
@@ -134,7 +178,7 @@
             <div class="header-left">
                 <div id="hamburger-btn" style="display:block; margin-right:10px; font-size:24px; cursor:pointer;">☰</div>
                 
-                <div class="avatar-wrapper">
+                <div class="avatar-wrapper" style="cursor: pointer;">
                     <img id="header-avatar" src="" alt="">
                     <div id="header-status-dot"></div>
                 </div>
@@ -160,6 +204,11 @@
         </div>
 
         <div id="input-area">
+            <!-- CHAT LOCK OVERLAY (Reason Only) -->
+            <div id="lock-overlay">
+                <div id="lock-reason-display">Chat Locked</div>
+            </div>
+
             <div id="reply-preview-bar">
                 <div class="reply-info">
                     <span id="reply-to-user"></span>
@@ -169,15 +218,16 @@
             </div>
 
             <div id="plus-menu">
-                <div id="menu-media">🖼️ Photos/Video</div>
+                <div id="menu-media">🖼️ Photos/Video/File</div>
                 <div id="menu-voice">🎙️ Voice Message</div>
+                <div id="menu-lock" style="color: #ff3b30;">🔒 Chat Lock</div>
             </div>
 
             <button class="icon-btn" id="plus-btn">＋</button>
+            <!-- UPDATED: Allow all media types -->
             <input type="file" id="file-input" style="display:none" accept="image/*,video/*,audio/*">
             
             <input type="file" id="profile-file-input" style="display:none" accept="image/*">
-            <canvas id="crop-canvas" style="display:none;"></canvas>
             
             <button class="icon-btn" id="cancel-rec-btn" style="display:none; color:#ff3b30;">✖</button>
             
@@ -247,7 +297,7 @@
             }, 400);
         }
     </script>
-    <script type="module" src="app.js?v=1118"></script>
+    <script type="module" src="app.js?v=1125"></script>
     <script src="bganimator.js"></script>
 </body>
 </html>
